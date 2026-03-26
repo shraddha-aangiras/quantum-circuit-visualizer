@@ -22,5 +22,6 @@ EMSCRIPTEN_BINDINGS(quantum_module) {
     class_<Simulator>("Simulator")
         .constructor<int>()
         .function("run", &Simulator::run)
-        .function("get_probabilities", &Simulator::get_probabilities);
+        .function("get_probabilities", &Simulator::get_probabilities)
+        .function("get_statevector", &Simulator::get_statevector);
 }

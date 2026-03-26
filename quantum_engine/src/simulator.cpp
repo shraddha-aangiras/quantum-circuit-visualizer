@@ -28,3 +28,13 @@ vector<double> Simulator::get_probabilities() const {
     }
     return probs;
 }
+
+vector<double> Simulator::get_statevector() const {
+    vector<double> flat_state;
+    const auto& state = q_state.get_state();
+    for (size_t i = 0; i < state.size(); i++) {
+        flat_state.push_back(state[i].real());
+        flat_state.push_back(state[i].imag());
+    }
+    return flat_state;
+}

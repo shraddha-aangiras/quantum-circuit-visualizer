@@ -11,4 +11,5 @@ public:
     Simulator(int num_qubits);
     void run(const vector<Instruction>& circuit);
     vector<double> get_probabilities() const;
+    vector<double> get_statevector() const;
 };
