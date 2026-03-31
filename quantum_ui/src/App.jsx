@@ -522,7 +522,6 @@ useEffect(() => {
       
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between z-20 shrink-0">
         <div className="flex items-center gap-2">
-          <Settings2 className="text-blue-500" />
           <h1 className="text-xl font-bold tracking-tight text-white">Quantum Circuit Visualizer</h1>
         </div>
         <button 
