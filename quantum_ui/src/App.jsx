@@ -5,10 +5,12 @@ import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/ad
 import initQuantumEngine from './wasm/quantum_engine.js'
 import { AVAILABLE_GATES } from './constants';
 import { compactCircuit } from './utils/compactCircuit';
+import { simulateShots } from './utils/simulateShots';
 import DraggableGate from './components/DraggableGate';
 import DraggableCnotNode from './components/DraggableCnotNode';
 import DraggablePlacedGate from './components/DraggablePlacedGate';
 import DropZone from './components/DropZone';
+import MeasurementHistogram from './components/MeasurementHistogram'; 
 import './App.css'
 
 function App() {
@@ -21,6 +23,9 @@ function App() {
   const [probabilities, setProbabilities] = useState([]);
   const [stateVector, setStateVector] = useState([]);
   const [isReady, setIsReady] = useState(false);
+  
+  const [shots, setShots] = useState(100);
+  const [shotResults, setShotResults] = useState([]);
 
   // ---------------------------------------------------------------------------
   // Auto-resize: keep at least 5 empty columns past the last occupied step
@@ -297,8 +302,22 @@ function App() {
 
     const cppProb = sim.get_probabilities();
     const probArr = [];
-    for (let i = 0; i < cppProb.size(); i++) probArr.push(cppProb.get(i));
+    const events = [];
+    
+    for (let i = 0; i < cppProb.size(); i++) {
+      probArr.push(cppProb.get(i));
+      events.push(i.toString(2).padStart(numQubits, '0'));
+    }
     setProbabilities(probArr);
+
+    const numShots = parseInt(shots, 10) || 100;
+    const rawCounts = simulateShots(events, probArr, numShots);
+    
+    const chartData = events.map(state => ({
+      state: `|${state}⟩`,
+      count: rawCounts[state]
+    }));
+    setShotResults(chartData);
 
     const cppState = sim.get_statevector();
     const stateArr = [];
@@ -324,16 +343,31 @@ function App() {
 
       <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between z-20 shrink-0">
         <h1 className="text-xl font-bold tracking-tight text-white">Quantum Circuit Visualizer</h1>
-        <button
-          onClick={runCircuit}
-          disabled={!isReady}
-          className={`px-4 py-2 rounded-md font-semibold flex items-center gap-2 transition-colors ${
-            isReady ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-          }`}
-        >
-          <Play size={18} />
-          {isReady ? 'Run Circuit' : 'Loading Engine...'}
-        </button>
+        
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 text-sm text-slate-400 font-mono">
+            <label htmlFor="shots">Shots:</label>
+            <input
+              id="shots"
+              type="number"
+              value={shots}
+              onChange={(e) => setShots(e.target.value)}
+              className="w-24 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white focus:outline-none focus:border-blue-500"
+              min="1"
+              max="100000"
+            />
+          </div>
+          <button
+            onClick={runCircuit}
+            disabled={!isReady}
+            className={`px-4 py-2 rounded-md font-semibold flex items-center gap-2 transition-colors ${
+              isReady ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            <Play size={18} />
+            {isReady ? 'Run Circuit' : 'Loading Engine...'}
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -425,37 +459,44 @@ function App() {
 
           {/* Results panels */}
           {(probabilities.length > 0 || stateVector.length > 0) && (
-            <div className="grid grid-cols-2 gap-6 items-start self-start min-w-max">
+            <div className="flex flex-col gap-6 self-start min-w-[600px] w-full max-w-5xl">
+              
+              {/* Inserted modular Histogram component */}
+              <MeasurementHistogram data={shotResults} shots={shots} />
 
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl">
-                <h3 className="font-bold text-white mb-4 border-b border-slate-800 pb-2">Probabilities</h3>
-                <div className="flex flex-col gap-2 font-mono text-sm">
-                  {probabilities.map((prob, index) => {
-                    const numQubits = Math.log2(probabilities.length);
-                    const label = index.toString(2).padStart(numQubits, '0');
-                    return (
-                      <div key={`prob-${index}`} className="flex justify-between gap-12">
-                        <span className="text-slate-500">|{label}⟩</span>
-                        <span className="font-semibold text-blue-400">{(prob * 100).toFixed(2)}%</span>
-                      </div>
-                    );
-                  })}
+              <div className="grid grid-cols-2 gap-6 items-start">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl">
+                  <h3 className="font-bold text-white mb-4 border-b border-slate-800 pb-2">Theoretical Probabilities</h3>
+                  <div className="flex flex-col gap-2 font-mono text-sm">
+                    {probabilities.map((prob, index) => {
+                      const numQubits = Math.log2(probabilities.length);
+                      const label = index.toString(2).padStart(numQubits, '0');
+                      if (prob === 0) return null;
+                      return (
+                        <div key={`prob-${index}`} className="flex justify-between gap-12">
+                          <span className="text-slate-500">|{label}⟩</span>
+                          <span className="font-semibold text-blue-400">{(prob * 100).toFixed(2)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl">
-                <h3 className="font-bold text-white mb-4 border-b border-slate-800 pb-2">Complex Amplitudes</h3>
-                <div className="flex flex-col gap-2 font-mono text-sm">
-                  {stateVector.map((amp, index) => {
-                    const numQubits = Math.log2(stateVector.length);
-                    const label = index.toString(2).padStart(numQubits, '0');
-                    return (
-                      <div key={`amp-${index}`} className="flex justify-between gap-12">
-                        <span className="text-slate-500">|{label}⟩</span>
-                        <span className="font-semibold text-emerald-400">{amp}</span>
-                      </div>
-                    );
-                  })}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl">
+                  <h3 className="font-bold text-white mb-4 border-b border-slate-800 pb-2">Complex Amplitudes</h3>
+                  <div className="flex flex-col gap-2 font-mono text-sm">
+                    {stateVector.map((amp, index) => {
+                      const numQubits = Math.log2(stateVector.length);
+                      const label = index.toString(2).padStart(numQubits, '0');
+                      if (amp === '0.0000 + 0.0000i' || amp === '0.0000 - 0.0000i') return null;
+                      return (
+                        <div key={`amp-${index}`} className="flex justify-between gap-12">
+                          <span className="text-slate-500">|{label}⟩</span>
+                          <span className="font-semibold text-emerald-400">{amp}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
