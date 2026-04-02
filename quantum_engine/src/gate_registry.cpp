@@ -19,10 +19,16 @@ namespace GateRegistry {
         Complex(1, 0), Complex(0, 0), 
         Complex(0, 0), Complex(-1, 0)
     };
+
+    const Matrix2x2 T = {
+    Complex(1, 0), Complex(0, 0), 
+    Complex(0, 0), Complex(inv_sqrt2, inv_sqrt2)
+    };
     
     const unordered_map<string, Matrix2x2> base_gates = {
         {"H", H},
         {"X", X},
-        {"Z", Z}
+        {"Z", Z},
+        {"T", T}
     };
 }

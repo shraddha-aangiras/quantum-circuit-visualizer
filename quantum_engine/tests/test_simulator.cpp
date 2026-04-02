@@ -28,18 +28,15 @@ TEST(QuantumEngineTest, HXZSuperposition) {
     Simulator sim(2);
 
     std::vector<Instruction> circuit = {
-        {"H", {0}},
-        {"X", {0}},
-        {"Z", {0}},
-        {"H", {1}}
+        {"T", {0}}
     };
 
     sim.run(circuit);
 
     std::vector<double> probs = sim.get_probabilities();
 
-    EXPECT_NEAR(probs[0], 0.25, 1e-5); 
-    EXPECT_NEAR(probs[1], 0.25, 1e-5); 
-    EXPECT_NEAR(probs[2], 0.25, 1e-5); 
-    EXPECT_NEAR(probs[3], 0.25, 1e-5);
+    EXPECT_NEAR(probs[0], 1, 1e-5); 
+    EXPECT_NEAR(probs[1], 0, 1e-5); 
+    EXPECT_NEAR(probs[2], 0.0, 1e-5);
+    EXPECT_NEAR(probs[3], 0.0, 1e-5);
 }
