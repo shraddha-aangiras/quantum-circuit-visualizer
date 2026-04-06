@@ -3,9 +3,12 @@ import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import GateVisual from './GateVisual';
 import { GATE_STYLES } from '../constants';
 
+const TWO_WIRE = ['CNOT', 'CC_X', 'CC_Z'];
+
 /**
  * A draggable gate tile shown in the sidebar palette.
- * Dragging one of these onto a DropZone places a new gate.
+ * Two-wire gates (CNOT, CC_X, CC_Z) use a compact icon layout.
+ * Single-qubit gates use a square tile.
  */
 const DraggableGate = ({ gate }) => {
   const ref = useRef(null);
@@ -24,7 +27,7 @@ const DraggableGate = ({ gate }) => {
 
   const baseClasses = `transition-all cursor-grab flex items-center justify-center font-bold ${isDragging ? 'opacity-50' : ''}`;
 
-  if (gate === 'CNOT') {
+  if (TWO_WIRE.includes(gate)) {
     return (
       <div ref={ref} className={`${baseClasses} p-2 ${GATE_STYLES[gate]}`}>
         <GateVisual name={gate} />

@@ -6,7 +6,7 @@ import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/ad
 // tomography -> timestep + choose my qubit?
 
 import initQuantumEngine from './wasm/quantum_engine.js'
-import { AVAILABLE_GATES } from './constants';
+import { SINGLE_QUBIT_GATES, TWO_WIRE_GATES } from './constants';
 import { compactCircuit } from './utils/compactCircuit';
 import { simulateShots } from './utils/simulateShots';
 import DraggableGate from './components/DraggableGate';
@@ -34,6 +34,9 @@ function App() {
   const [measureStep, setMeasureStep] = useState(null);
   const [selectedQubit, setSelectedQubit] = useState(null);
   const [expectationValue, setExpectationValue] = useState(null);
+  const [classicalBits, setClassicalBits] = useState([]);
+
+  const TWO_WIRE = ['CNOT', 'CC_X', 'CC_Z'];
 
   // ---------------------------------------------------------------------------
   // WASM engine
@@ -67,11 +70,12 @@ function App() {
         const cell = circuit[wire][step];
         if (!cell) continue;
 
-        if (cell.name === 'CNOT') {
+        if (TWO_WIRE.includes(cell.name)) {
           if (cell.role === 'control') {
-            compiledInstructions.push({ name: 'CNOT', qubits: [wire, cell.targetWire] });
+            compiledInstructions.push({ name: cell.name, qubits: [wire, cell.targetWire] });
           }
         } else {
+          // Single-qubit gate or MEASURE
           compiledInstructions.push({ name: cell.name, qubits: [wire] });
         }
       }
@@ -84,26 +88,17 @@ function App() {
       cppQubits.delete();
     });
 
+    // --- Single display run (probabilities, amplitudes, expectation, classical bits) ---
     sim.run(cppCircuit);
 
     const cppProb = sim.get_probabilities();
     const probArr = [];
     const events = [];
-
     for (let i = 0; i < cppProb.size(); i++) {
       probArr.push(cppProb.get(i));
       events.push(i.toString(2).padStart(numQubits, '0'));
     }
     setProbabilities(probArr);
-
-    const numShots = parseInt(shots, 10) || 100;
-    const rawCounts = simulateShots(events, probArr, numShots);
-
-    const chartData = events.map(state => ({
-      state: `|${state}⟩`,
-      count: rawCounts[state]
-    }));
-    setShotResults(chartData);
 
     const cppState = sim.get_statevector();
     const stateArr = [];
@@ -121,10 +116,41 @@ function App() {
       setExpectationValue(null);
     }
 
+    const cppBits = sim.get_classical_bits();
+    const bitsArr = [];
+    for (let i = 0; i < cppBits.size(); i++) bitsArr.push(cppBits.get(i));
+    setClassicalBits(bitsArr);
+
     sim.delete();
-    cppCircuit.delete();
     cppProb.delete();
     cppState.delete();
+    cppBits.delete();
+
+    // --- Histogram: multi-shot if measurements present, otherwise sample from probs ---
+    const hasMeasurements = compiledInstructions.some(i => i.name === 'MEASURE');
+    const numShots = parseInt(shots, 10) || 100;
+
+    if (hasMeasurements) {
+      const counts = Object.fromEntries(events.map(e => [e, 0]));
+      for (let s = 0; s < numShots; s++) {
+        const simShot = new engine.Simulator(numQubits);
+        simShot.run(cppCircuit);          // cppCircuit reused across shots
+        const cppProbShot = simShot.get_probabilities();
+        let r = Math.random();
+        for (let i = 0; i < cppProbShot.size(); i++) {
+          r -= cppProbShot.get(i);
+          if (r <= 0) { counts[events[i]]++; break; }
+        }
+        simShot.delete();
+        cppProbShot.delete();
+      }
+      setShotResults(events.map(state => ({ state: `|${state}⟩`, count: counts[state] })));
+    } else {
+      const rawCounts = simulateShots(events, probArr, numShots);
+      setShotResults(events.map(state => ({ state: `|${state}⟩`, count: rawCounts[state] })));
+    }
+
+    cppCircuit.delete();   // safe to delete after all shots are done
   }, [circuit, engine, shots, selectedQubit]);
 
   useEffect(() => {
@@ -147,7 +173,7 @@ function App() {
       }
     });
 
-    const desiredLength = Math.max(5, highestOccupiedIndex + 5);
+    const desiredLength = Math.max(10, highestOccupiedIndex + 6);
     const currentLength = circuit[0].length;
 
     if (currentLength !== desiredLength) {
@@ -178,7 +204,7 @@ function App() {
         if (gateData.type === 'gate' && slotData.type === 'slot') {
           setCircuit(prev => {
             const newCircuit = prev.map(wire => [...wire]);
-            if (gateData.name === 'CNOT') {
+            if (TWO_WIRE.includes(gateData.name)) {
               const cIndex = slotData.wireIndex;
               const tIndex = cIndex < prev.length - 1 ? cIndex + 1 : cIndex - 1;
               newCircuit[cIndex][slotData.stepIndex] = { name: 'CNOT', role: 'control', targetWire: tIndex };
@@ -287,7 +313,7 @@ function App() {
             });
 
             if (gateData.type === 'gate') {
-              if (gateData.name === 'CNOT') {
+              if (TWO_WIRE.includes(gateData.name)) {
                 const tIndex = targetWire < prev.length - 1 ? targetWire + 1 : targetWire - 1;
                 newCircuit[targetWire][insertStep] = { name: 'CNOT', role: 'control', targetWire: tIndex };
                 newCircuit[tIndex][insertStep] = { name: 'CNOT', role: 'target', controlWire: targetWire };
@@ -324,7 +350,7 @@ function App() {
       const newCircuit = prev.map(wire => [...wire]);
       const cell = newCircuit[wireIndex][stepIndex];
       if (!cell) return prev;
-      if (cell.name === 'CNOT') {
+      if (TWO_WIRE.includes(cell.name)) {
         const peerWire = cell.role === 'control' ? cell.targetWire : cell.controlWire;
         newCircuit[wireIndex][stepIndex] = null;
         newCircuit[peerWire][stepIndex] = null;
@@ -357,38 +383,34 @@ function App() {
     <div className="fixed inset-0 flex font-sans text-slate-300 bg-slate-950">
 
       {/* Left sidebar — title, gates, shots */}
-      <aside className="w-44 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-10">
+      <aside className="w-55 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-10">
         <div className="px-4 py-3 border-b border-slate-700/50">
-          <h1 className="text-sm font-semibold text-white tracking-tight leading-tight">QC Visualizer</h1>
+          <h1 className="text-sm font-semibold text-white tracking-tight leading-tight">Circuit Visualizer</h1>
           {!isReady && <p className="text-[10px] text-amber-400 animate-pulse mt-0.5">Initializing…</p>}
         </div>
 
-        <div className="p-4 flex flex-col gap-5 overflow-y-auto flex-1">
+        <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Gates</p>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Single-qubit</p>
             <div className="grid grid-cols-2 gap-3 items-center justify-items-center">
-              {AVAILABLE_GATES.map(gate => (
+              {SINGLE_QUBIT_GATES.map(gate => (
                 <DraggableGate key={gate} gate={gate} />
               ))}
             </div>
           </div>
-
           <div>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Shots</p>
-            <input
-              type="number"
-              value={shots}
-              onChange={(e) => setShots(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs font-mono focus:outline-none focus:border-slate-500 focus:text-white"
-              min="1"
-              max="100000"
-            />
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">2-qubit</p>
+            <div className="flex flex-col gap-2 items-center">
+              {TWO_WIRE_GATES.map(gate => (
+                <DraggableGate key={gate} gate={gate} />
+              ))}
+            </div>
           </div>
         </div>
       </aside>
 
       {/* Circuit board */}
-      <div className="flex-1 overflow-auto p-5 bg-slate-950">
+      <div className="flex-1 overflow-auto p-3 bg-slate-950">
         <div className="bg-slate-900 border border-slate-700/50 rounded-xl shadow-xl p-5 inline-block min-w-max">
 
           {/* Time scrubber row */}
@@ -443,7 +465,7 @@ function App() {
                     className="w-14 h-14 relative flex items-center justify-center mx-1 z-10"
                   >
                     {cell ? (
-                      cell.name === 'CNOT' ? (
+                      TWO_WIRE.includes(cell.name) ? (
                         <div
                           className="w-full h-full relative flex items-center justify-center z-20 group/cnot"
                           onContextMenu={(e) => handleRightClickDelete(e, wireIndex, stepIndex)}
@@ -452,15 +474,32 @@ function App() {
 
                           {cell.role === 'control' && (
                             <>
-                              <div
-                                className="absolute w-px bg-slate-400 z-0 pointer-events-none"
-                                style={{
-                                  left: 'calc(50% - 1px)',
-                                  top: cell.targetWire > wireIndex ? '50%' : 'auto',
-                                  bottom: cell.targetWire < wireIndex ? '50%' : 'auto',
-                                  height: `${Math.abs(cell.targetWire - wireIndex) * 5}rem`,
-                                }}
-                              />
+                              {cell.name === 'CNOT' ? (
+                                /* Quantum wire: single slate line */
+                                <div
+                                  className="absolute w-px bg-slate-400 z-0 pointer-events-none"
+                                  style={{
+                                    left: 'calc(50% - 1px)',
+                                    top: cell.targetWire > wireIndex ? '50%' : 'auto',
+                                    bottom: cell.targetWire < wireIndex ? '50%' : 'auto',
+                                    height: `${Math.abs(cell.targetWire - wireIndex) * 5}rem`,
+                                  }}
+                                />
+                              ) : (
+                                /* Classical wire: double amber line */
+                                <div
+                                  className="absolute z-0 pointer-events-none"
+                                  style={{
+                                    left: 'calc(50% - 3px)',
+                                    top: cell.targetWire > wireIndex ? '50%' : 'auto',
+                                    bottom: cell.targetWire < wireIndex ? '50%' : 'auto',
+                                    height: `${Math.abs(cell.targetWire - wireIndex) * 5}rem`,
+                                    width: '6px',
+                                    borderLeft:  '1.5px solid rgba(251,191,36,0.6)',
+                                    borderRight: '1.5px solid rgba(251,191,36,0.6)',
+                                  }}
+                                />
+                              )}
                               <button
                                 onClick={(e) => { e.stopPropagation(); deleteGate(wireIndex, stepIndex); }}
                                 className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-700 text-slate-300 hover:bg-red-500 hover:text-white text-[10px] flex items-center justify-center z-40 opacity-0 group-hover/cnot:opacity-100 transition-opacity leading-none"
@@ -526,6 +565,22 @@ function App() {
                 </div>
               )}
 
+              {classicalBits.some(b => b !== -1) && (
+                <div className="px-4 py-3">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2.5">Classical Bits</p>
+                  <div className="flex flex-col gap-1.5 font-mono text-xs">
+                    {classicalBits.map((bit, i) => bit === -1 ? null : (
+                      <div key={i} className="flex justify-between items-center">
+                        <span className="text-slate-400">q[{i}]</span>
+                        <span className={`font-semibold tabular-nums px-1.5 py-0.5 rounded text-[11px] ${bit === 1 ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-700/50 text-slate-300'}`}>
+                          {bit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {probabilities.length > 0 && (
                 <div className="px-4 py-3">
                   <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2.5">Probabilities</p>
@@ -566,6 +621,18 @@ function App() {
 
               <div className="px-4 py-3">
                 <MeasurementHistogram data={shotResults} shots={shots} />
+              </div>
+
+              <div className="px-4 py-3">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Shots</p>
+                <input
+                  type="number"
+                  value={shots}
+                  onChange={(e) => setShots(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs font-mono focus:outline-none focus:border-slate-500 focus:text-white"
+                  min="1"
+                  max="100000"
+                />
               </div>
             </>
           )}

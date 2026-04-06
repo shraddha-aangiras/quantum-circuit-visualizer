@@ -3,12 +3,30 @@
 #include <stdexcept>
 using namespace std;
 
-Simulator::Simulator(int num_qubits) : q_state(num_qubits) {}
+Simulator::Simulator(int n) : num_qubits(n), q_state(n), classical_bits(n, -1) {}
 
 void Simulator::run(const vector<Instruction>& circuit) {
+    fill(classical_bits.begin(), classical_bits.end(), -1);
+
     for (const auto& inst : circuit) {
         if (inst.name == "CNOT") {
             q_state.apply_cnot(inst.qubits[0], inst.qubits[1]);
+
+        } else if (inst.name == "MEASURE") {
+            int q = inst.qubits[0];
+            classical_bits[q] = q_state.measure_qubit(q);
+
+        } else if (inst.name == "CC_X") {
+            // qubits[0] = source (measured), qubits[1] = target
+            int src = inst.qubits[0], tgt = inst.qubits[1];
+            if (classical_bits[src] == 1)
+                q_state.apply_1q_gate(GateRegistry::base_gates.at("X"), tgt);
+
+        } else if (inst.name == "CC_Z") {
+            int src = inst.qubits[0], tgt = inst.qubits[1];
+            if (classical_bits[src] == 1)
+                q_state.apply_1q_gate(GateRegistry::base_gates.at("Z"), tgt);
+
         } else {
             auto it = GateRegistry::base_gates.find(inst.name);
             if (it != GateRegistry::base_gates.end()) {
@@ -23,43 +41,37 @@ void Simulator::run(const vector<Instruction>& circuit) {
 vector<double> Simulator::get_probabilities() const {
     const auto& state = q_state.get_state();
     vector<double> probs(state.size());
-    for (size_t i = 0; i < state.size(); ++i) {
+    for (size_t i = 0; i < state.size(); ++i)
         probs[i] = norm(state[i]);
-    }
     return probs;
 }
 
 vector<double> Simulator::get_statevector() const {
-    vector<double> flat_state;
+    vector<double> flat;
     const auto& state = q_state.get_state();
     for (size_t i = 0; i < state.size(); i++) {
-        flat_state.push_back(state[i].real());
-        flat_state.push_back(state[i].imag());
+        flat.push_back(state[i].real());
+        flat.push_back(state[i].imag());
     }
-    return flat_state;
+    return flat;
 }
 
 double Simulator::get_expectation_z(int target_qubit) const {
     const auto& state = q_state.get_state();
     int num_states = state.size();
 
-    int num_qubits = 0;
-    while ((1 << num_qubits) < num_states) {
-        num_qubits++;
-    }
+    int nq = 0;
+    while ((1 << nq) < num_states) nq++;
 
     double exp_val = 0.0;
-    
     for (int i = 0; i < num_states; i++) {
-        int bit = (i >> (num_qubits - 1 - target_qubit)) & 1;
-        double prob = norm(state[i]);
-        
-        if (bit == 0) {
-            exp_val += prob; // P(|0>)
-        } else {
-            exp_val -= prob; // P(|1>)
-        }
+        int bit = (i >> (nq - 1 - target_qubit)) & 1;
+        double p = norm(state[i]);
+        exp_val += (bit == 0) ? p : -p;
     }
-    
     return exp_val;
+}
+
+vector<int> Simulator::get_classical_bits() const {
+    return classical_bits;
 }

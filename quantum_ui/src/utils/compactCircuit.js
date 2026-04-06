@@ -16,7 +16,8 @@ export const compactCircuit = (oldCircuit) => {
         const cell = oldCircuit[wire][step];
         if (!cell) continue;
   
-        if (cell.name === 'CNOT') {
+        const TWO_WIRE = ['CNOT', 'CC_X', 'CC_Z'];
+        if (TWO_WIRE.includes(cell.name)) {
           const peerWire = cell.role === 'control' ? cell.targetWire : cell.controlWire;
   
           const cnotId = `${Math.min(wire, peerWire)}-${Math.max(wire, peerWire)}-${step}`;
