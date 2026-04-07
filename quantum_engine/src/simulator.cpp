@@ -19,13 +19,13 @@ void Simulator::run(const vector<Instruction>& circuit) {
             int q = inst.qubits[0];
             classical_bits[q] = q_state.measure_qubit(q);
 
-        } else if (inst.name == "CC_X") {
+        } else if (inst.name == "FF_x") {
             // qubits[0] = source (measured), qubits[1] = target
             int src = inst.qubits[0], tgt = inst.qubits[1];
             if (classical_bits[src] == 1)
                 q_state.apply_1q_gate(GateRegistry::base_gates.at("X"), tgt);
 
-        } else if (inst.name == "CC_Z") {
+        } else if (inst.name == "FF_Z") {
             int src = inst.qubits[0], tgt = inst.qubits[1];
             if (classical_bits[src] == 1)
                 q_state.apply_1q_gate(GateRegistry::base_gates.at("Z"), tgt);
