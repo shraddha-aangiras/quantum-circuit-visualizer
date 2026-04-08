@@ -3,7 +3,7 @@ import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import GateVisual from './GateVisual';
 import { GATE_STYLES } from '../constants';
 
-const MULTI_WIRE = ['CNOT', 'CZ', 'FF_x', 'FF_Z', 'TOFFOLI'];
+const MULTI_WIRE = ['CNOT', 'CZ', 'FF_x', 'FF_Z', 'TOFFOLI', 'BARRIER'];
 
 /**
  * A draggable gate tile shown in the sidebar palette.

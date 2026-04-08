@@ -18,8 +18,23 @@ export const compactCircuit = (oldCircuit) => {
   
         const TWO_WIRE = ['CNOT', 'CZ', 'FF_x', 'FF_Z'];
         const THREE_WIRE = ['TOFFOLI'];
-        
-        if (TWO_WIRE.includes(cell.name)) {
+
+        if (cell.name === 'BARRIER') {
+          const { topWire, bottomWire } = cell;
+          const barrId = `barrier-${topWire}-${bottomWire}-${step}`;
+          if (processedCNOTs.has(barrId)) continue;
+          processedCNOTs.add(barrId);
+
+          let maxTail = -1;
+          for (let w = topWire; w <= bottomWire; w++) {
+            if (tail[w] > maxTail) maxTail = tail[w];
+          }
+          const targetStep = maxTail + 1;
+          for (let w = topWire; w <= bottomWire; w++) {
+            newCircuit[w][targetStep] = { name: 'BARRIER', topWire, bottomWire };
+            tail[w] = targetStep;
+          }
+        } else if (TWO_WIRE.includes(cell.name)) {
           const peerWire = cell.role === 'control' ? cell.targetWire : cell.controlWire;
   
           const cnotId = `${Math.min(wire, peerWire)}-${Math.max(wire, peerWire)}-${step}`;

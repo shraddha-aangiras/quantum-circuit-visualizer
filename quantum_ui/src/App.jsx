@@ -11,6 +11,7 @@ import { circuitToCode, parseCode } from './utils/circuitCode';
 import DraggableGate from './components/DraggableGate';
 import DraggableCnotNode from './components/DraggableCnotNode';
 import DraggablePlacedGate from './components/DraggablePlacedGate';
+import DraggableBarrier from './components/DraggableBarrier';
 import DropZone from './components/DropZone';
 import MeasurementHistogram from './components/MeasurementHistogram';
 import ExpectationValue from './components/ExpectationValue';
@@ -32,6 +33,8 @@ function App() {
 
   const [measureStep, setMeasureStep] = useState(null);
   const [selectedQubit, setSelectedQubit] = useState(null);
+  // key: `${stepIndex}-${topWire}-${bottomWire}` — shared hover across all barrier wire slots
+  const [hoveredBarrier, setHoveredBarrier] = useState(null);
   const [expectationValue, setExpectationValue] = useState(null);
   const [, setClassicalBits] = useState([]);
 
@@ -81,7 +84,9 @@ function App() {
         const cell = circuit[wire][step];
         if (!cell) continue;
 
-        if (TWO_WIRE.includes(cell.name)) {
+        if (cell.name === 'BARRIER') {
+          // visual only — no quantum operation
+        } else if (TWO_WIRE.includes(cell.name)) {
           if (cell.role === 'control') {
             compiledInstructions.push({ name: cell.name, qubits: [wire, cell.targetWire] });
           }
@@ -234,6 +239,67 @@ function App() {
 
         const gateData = source.data;
         const slotData = destination.data;
+
+        if (gateData.type === 'gate' && gateData.name === 'BARRIER' && slotData.type === 'slot') {
+          setCircuit(prev => {
+            const newCircuit = prev.map(wire => [...wire]);
+            const numW = prev.length;
+            for (let w = 0; w < numW; w++) {
+              newCircuit[w][slotData.stepIndex] = { name: 'BARRIER', topWire: 0, bottomWire: numW - 1 };
+            }
+            return compactCircuit(newCircuit);
+          });
+          return;
+        }
+
+        // Whole-barrier move — only place if destination column is free for all wires in span
+        if (gateData.type === 'barrier' && slotData.type === 'slot') {
+          setCircuit(prev => {
+            const newCircuit = prev.map(wire => [...wire]);
+            const { topWire, bottomWire, stepIndex: oldStep } = gateData;
+            const newStep = slotData.stepIndex;
+            if (oldStep === newStep) return prev;
+            // Check destination is clear (ignoring the barrier's own cells)
+            for (let w = topWire; w <= bottomWire; w++) {
+              const occupant = newCircuit[w][newStep];
+              if (occupant && !(occupant.name === 'BARRIER' && occupant.topWire === topWire && occupant.bottomWire === bottomWire)) return prev;
+            }
+            for (let w = topWire; w <= bottomWire; w++) newCircuit[w][oldStep] = null;
+            for (let w = topWire; w <= bottomWire; w++) {
+              newCircuit[w][newStep] = { name: 'BARRIER', topWire, bottomWire };
+            }
+            return compactCircuit(newCircuit);
+          });
+          return;
+        }
+
+        // Barrier end-node resize — drop onto any slot (empty or barrier wire)
+        if (gateData.type === 'barrier-end' && (slotData.type === 'slot' || slotData.type === 'gate-insert')) {
+          setCircuit(prev => {
+            const newCircuit = prev.map(wire => [...wire]);
+            const { role, topWire, bottomWire, stepIndex: barrStep } = gateData;
+            const newWire = slotData.wireIndex;
+            if (slotData.stepIndex !== barrStep) return prev;
+
+            let newTop = topWire;
+            let newBottom = bottomWire;
+            if (role === 'top') {
+              newTop = Math.min(newWire, bottomWire);
+            } else {
+              newBottom = Math.max(newWire, topWire);
+            }
+            if (newTop === topWire && newBottom === bottomWire) return prev;
+
+            // Clear old span
+            for (let w = topWire; w <= bottomWire; w++) newCircuit[w][barrStep] = null;
+            // Write new span
+            for (let w = newTop; w <= newBottom; w++) {
+              newCircuit[w][barrStep] = { name: 'BARRIER', topWire: newTop, bottomWire: newBottom };
+            }
+            return compactCircuit(newCircuit);
+          });
+          return;
+        }
 
         if (gateData.type === 'gate' && slotData.type === 'slot') {
           setCircuit(prev => {
@@ -451,6 +517,10 @@ function App() {
               newCircuit[gateData.controls[0]][gateData.stepIndex] = null;
               newCircuit[gateData.controls[1]][gateData.stepIndex] = null;
               newCircuit[gateData.targetWire][gateData.stepIndex] = null;
+            } else if (gateData.type === 'barrier') {
+              for (let w = gateData.topWire; w <= gateData.bottomWire; w++) {
+                newCircuit[w][gateData.stepIndex] = null;
+              }
             }
 
             newCircuit = newCircuit.map(wire => {
@@ -495,6 +565,16 @@ function App() {
               newCircuit[gateData.controls[0]][insertStep] = { name: gateData.name, role: 'control', controls: gateData.controls, targetWire: gateData.targetWire };
               newCircuit[gateData.controls[1]][insertStep] = { name: gateData.name, role: 'control', controls: gateData.controls, targetWire: gateData.targetWire };
               newCircuit[gateData.targetWire][insertStep] = { name: gateData.name, role: 'target', controls: gateData.controls, targetWire: gateData.targetWire };
+            } else if (gateData.type === 'barrier') {
+              const { topWire, bottomWire } = gateData;
+              for (let w = topWire; w <= bottomWire; w++) {
+                newCircuit[w][insertStep] = { name: 'BARRIER', topWire, bottomWire };
+              }
+            } else if (gateData.type === 'gate' && gateData.name === 'BARRIER') {
+              const numW = prev.length;
+              for (let w = 0; w < numW; w++) {
+                newCircuit[w][insertStep] = { name: 'BARRIER', topWire: 0, bottomWire: numW - 1 };
+              }
             }
 
             return compactCircuit(newCircuit);
@@ -520,8 +600,35 @@ function App() {
         newCircuit[cell.controls[0]][stepIndex] = null;
         newCircuit[cell.controls[1]][stepIndex] = null;
         newCircuit[cell.targetWire][stepIndex] = null;
+      } else if (cell.name === 'BARRIER') {
+        for (let w = cell.topWire; w <= cell.bottomWire; w++) {
+          newCircuit[w][stepIndex] = null;
+        }
       } else {
         newCircuit[wireIndex][stepIndex] = null;
+      }
+      return compactCircuit(newCircuit);
+    });
+  }, []);
+
+
+  const resizeBarrier = useCallback((wireIndex, stepIndex, action) => {
+    setCircuit(prev => {
+      const newCircuit = prev.map(wire => [...wire]);
+      const cell = newCircuit[wireIndex][stepIndex];
+      if (!cell || cell.name !== 'BARRIER') return prev;
+
+      for (let w = cell.topWire; w <= cell.bottomWire; w++) newCircuit[w][stepIndex] = null;
+
+      let newTop = cell.topWire;
+      let newBottom = cell.bottomWire;
+      if (action === 'extendTop')    newTop    = Math.max(0, newTop - 1);
+      if (action === 'shrinkTop')    newTop    = Math.min(newTop + 1, newBottom);
+      if (action === 'extendBottom') newBottom = Math.min(prev.length - 1, newBottom + 1);
+      if (action === 'shrinkBottom') newBottom = Math.max(newBottom - 1, newTop);
+
+      for (let w = newTop; w <= newBottom; w++) {
+        newCircuit[w][stepIndex] = { name: 'BARRIER', topWire: newTop, bottomWire: newBottom };
       }
       return compactCircuit(newCircuit);
     });
@@ -561,6 +668,11 @@ function App() {
               controls: cell.controls.map(c => c > indexToRemove ? c - 1 : c),
               targetWire: cell.targetWire > indexToRemove ? cell.targetWire - 1 : cell.targetWire
             };
+          } else if (cell.name === 'BARRIER') {
+            const newTop    = cell.topWire    > indexToRemove ? cell.topWire    - 1 : cell.topWire;
+            const newBottom = cell.bottomWire > indexToRemove ? cell.bottomWire - 1 : cell.bottomWire;
+            if (newTop > newBottom) return null;
+            return { ...cell, topWire: newTop, bottomWire: newBottom };
           }
           return cell;
         });
@@ -831,6 +943,12 @@ function App() {
               ))}
             </div>
           </div>
+          <div>
+            <p className="text-[10px] font-semibold text-violet-400/70 uppercase tracking-widest mb-2">Barrier</p>
+            <div className="flex justify-center">
+              <DraggableGate gate="BARRIER" />
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -906,10 +1024,25 @@ function App() {
                 {wire.map((cell, stepIndex) => (
                   <div
                     key={`slot-${wireIndex}-${stepIndex}`}
-                    className="w-14 h-14 relative flex items-center justify-center mx-1 z-10"
+                    className={`w-14 h-14 relative flex items-center justify-center mx-1 z-10 ${cell?.name === 'BARRIER' ? 'overflow-visible' : ''}`}
                   >
                     {cell ? (
-                      (TWO_WIRE.includes(cell.name) || cell.name === 'TOFFOLI') ? (
+                      cell.name === 'BARRIER' ? (
+                        <div
+                          className="w-full h-full relative flex items-center justify-center z-20 overflow-visible"
+                          onContextMenu={(e) => handleRightClickDelete(e, wireIndex, stepIndex)}
+                        >
+                          <DraggableBarrier
+                            cell={cell}
+                            wireIndex={wireIndex}
+                            stepIndex={stepIndex}
+                            isHovered={hoveredBarrier === `${stepIndex}-${cell.topWire}-${cell.bottomWire}`}
+                            onHoverChange={(on) => setHoveredBarrier(on ? `${stepIndex}-${cell.topWire}-${cell.bottomWire}` : null)}
+                            onDelete={() => deleteGate(wireIndex, stepIndex)}
+                            onResize={(action) => resizeBarrier(wireIndex, stepIndex, action)}
+                          />
+                        </div>
+                      ) : (TWO_WIRE.includes(cell.name) || cell.name === 'TOFFOLI') ? (
                         <div
                           className="w-full h-full relative flex items-center justify-center z-20 group/cnot"
                           onContextMenu={(e) => handleRightClickDelete(e, wireIndex, stepIndex)}

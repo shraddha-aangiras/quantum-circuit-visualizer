@@ -1,6 +1,7 @@
 export const SINGLE_QUBIT_GATES = ['H', 'X', 'Y', 'Z', 'T', 'MEASURE'];
 export const TWO_WIRE_GATES     = ['CNOT', 'CZ', 'FF_x', 'FF_Z'];
 export const AVAILABLE_GATES    = [...SINGLE_QUBIT_GATES, ...TWO_WIRE_GATES];
+export const BARRIER_GATE       = 'BARRIER';
 
 // Which gates carry a classical wire (control is a measured bit, not a qubit)
 export const CLASSICAL_CTRL_GATES = ['FF_x', 'FF_Z'];
@@ -18,4 +19,6 @@ export const GATE_STYLES = {
   // Classically-controlled — amber to visually separate from quantum 2q gates
   FF_x:    'border-transparent bg-transparent text-amber-300 hover:text-amber-100',
   FF_Z:    'border-transparent bg-transparent text-amber-300 hover:text-amber-100',
+  // Barrier — violet
+  BARRIER: 'border-transparent bg-transparent text-violet-400 hover:text-violet-200',
 };

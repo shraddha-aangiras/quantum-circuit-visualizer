@@ -70,6 +70,14 @@ const GateVisual = ({ name }) => {
     );
   }
 
+  if (name === 'BARRIER') {
+    return (
+      <svg className="w-6 h-12" viewBox="0 0 12 32" fill="none">
+        <line x1="6" y1="0" x2="6" y2="32" stroke="currentColor" strokeWidth="2" strokeDasharray="3 3" />
+      </svg>
+    );
+  }
+
   if (name === 'MEASURE') {
     return (
       <div className="flex flex-col items-center gap-0.5 leading-none">
