@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
@@ -1243,14 +1243,23 @@ function App() {
               {/* Shots */}
               <div className="px-4 py-3">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Shots</p>
-                <input
-                  type="number"
-                  value={shots}
-                  onChange={(e) => setShots(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs font-mono focus:outline-none focus:border-slate-500 focus:text-white"
-                  min="1"
-                  max="100000"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={shots}
+                    onChange={(e) => setShots(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs font-mono focus:outline-none focus:border-slate-500 focus:text-white"
+                    min="1"
+                    max="100000"
+                  />
+                  <button
+                    onClick={() => runCircuit(measureStep)}
+                    className="px-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-slate-300 hover:text-white transition-colors flex items-center justify-center shrink-0"
+                    title="Resample Histogram"
+                  >
+                    <RefreshCw size={14} />
+                  </button>
+                </div>
               </div>
 
               {/* Circuit code */}
