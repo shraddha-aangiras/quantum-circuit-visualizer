@@ -17,6 +17,18 @@ import MeasurementHistogram from './components/MeasurementHistogram';
 import ExpectationValue from './components/ExpectationValue';
 import './App.css'
 
+/**
+ * Helper to safely make room in the circuit array before placing a gate/barrier.
+ * If any of the target wires are already occupied at `stepIndex`, it splices
+ * a clean column into the grid to push existing gates to the right.
+ */
+const insertColumnIfOccupied = (circuitGrid, stepIndex, wiresToCheck) => {
+  const needsInsert = wiresToCheck.some(w => circuitGrid[w] && circuitGrid[w][stepIndex] !== null);
+  if (needsInsert) {
+    circuitGrid.forEach(wire => wire.splice(stepIndex, 0, null));
+  }
+};
+
 function App() {
   const [circuit, setCircuit] = useState([
     [null, null, null, null],
@@ -257,13 +269,10 @@ function App() {
             const newCircuit = prev.map(wire => [...wire]);
             const numW = prev.length;
             const step = slotData.stepIndex;
-            let needsInsert = false;
-            for (let w = 0; w < numW; w++) {
-              if (newCircuit[w][step] !== null) { needsInsert = true; break; }
-            }
-            if (needsInsert) {
-              newCircuit.forEach(wire => wire.splice(step, 0, null));
-            }
+
+            const allWires = Array.from({ length: numW }, (_, i) => i);
+            insertColumnIfOccupied(newCircuit, step, allWires);
+
             for (let w = 0; w < numW; w++) {
               newCircuit[w][step] = { name: 'BARRIER', topWire: 0, bottomWire: numW - 1 };
             }
@@ -282,13 +291,8 @@ function App() {
             
             for (let w = topWire; w <= bottomWire; w++) newCircuit[w][oldStep] = null;
             
-            let needsInsert = false;
-            for (let w = topWire; w <= bottomWire; w++) {
-              if (newCircuit[w][newStep] !== null) { needsInsert = true; break; }
-            }
-            if (needsInsert) {
-              newCircuit.forEach(wire => wire.splice(newStep, 0, null));
-            }
+            const barrierWires = Array.from({ length: bottomWire - topWire + 1 }, (_, i) => topWire + i);
+            insertColumnIfOccupied(newCircuit, newStep, barrierWires);
 
             for (let w = topWire; w <= bottomWire; w++) {
               newCircuit[w][newStep] = { name: 'BARRIER', topWire, bottomWire };
@@ -318,13 +322,8 @@ function App() {
             // Clear old span
             for (let w = topWire; w <= bottomWire; w++) newCircuit[w][barrStep] = null;
 
-            let needsInsert = false;
-            for (let w = newTop; w <= newBottom; w++) {
-              if (newCircuit[w][barrStep] !== null) { needsInsert = true; break; }
-            }
-            if (needsInsert) {
-              newCircuit.forEach(wire => wire.splice(barrStep, 0, null));
-            }
+            const newSpanWires = Array.from({ length: newBottom - newTop + 1 }, (_, i) => newTop + i);
+            insertColumnIfOccupied(newCircuit, barrStep, newSpanWires);
 
             // Write new span
             for (let w = newTop; w <= newBottom; w++) {
@@ -374,17 +373,7 @@ function App() {
             }
 
             const step = slotData.stepIndex;
-            let needsInsert = false;
-            for (const w of targetWires) {
-              if (newCircuit[w][step] !== null) {
-                needsInsert = true;
-                break;
-              }
-            }
-
-            if (needsInsert) {
-              newCircuit.forEach(wire => wire.splice(step, 0, null));
-            }
+            insertColumnIfOccupied(newCircuit, step, targetWires);
 
             if (TWO_WIRE.includes(gateData.name)) {
               newCircuit[cIndex][step] = { name: gateData.name, role: 'control', targetWire: tIndex };
@@ -489,6 +478,9 @@ function App() {
             if (oldWire === newWire && oldStep === newStep) return prev;
 
             newCircuit[oldWire][oldStep] = null;
+            
+            insertColumnIfOccupied(newCircuit, newStep, [newWire]);
+
             newCircuit[newWire][newStep] = { name };
 
             return compactCircuit(newCircuit);
@@ -686,17 +678,8 @@ function App() {
       if (action === 'extendBottom') newBottom = Math.min(prev.length - 1, newBottom + 1);
       if (action === 'shrinkBottom') newBottom = Math.max(newBottom - 1, newTop);
 
-      let needsInsert = false;
-      for (let w = newTop; w <= newBottom; w++) {
-        if (newCircuit[w][stepIndex] !== null) {
-          needsInsert = true;
-          break;
-        }
-      }
-
-      if (needsInsert) {
-        newCircuit.forEach(wire => wire.splice(stepIndex, 0, null));
-      }
+      const newSpanWires = Array.from({ length: newBottom - newTop + 1 }, (_, i) => newTop + i);
+      insertColumnIfOccupied(newCircuit, stepIndex, newSpanWires);
 
       for (let w = newTop; w <= newBottom; w++) {
         newCircuit[w][stepIndex] = { name: 'BARRIER', topWire: newTop, bottomWire: newBottom };
