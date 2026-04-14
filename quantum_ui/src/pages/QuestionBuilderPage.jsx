@@ -884,6 +884,16 @@ export default function QuestionBuilderPage() {
     reader.readAsText(file); e.target.value = '';
   }
 
+  function handleExport() {
+    const input = window.prompt('Enter a name for the quiz file:', 'quiz');
+    if (input !== null) {
+      const safeName = input.trim() || 'quiz';
+      const filename = safeName.endsWith('.qpkg') ? safeName : `${safeName}.qpkg`;
+      const title = safeName.replace(/\.qpkg$/i, '');
+      download(filename, generateQuizPackage(questions, { title }));
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
       <header className="bg-slate-800 border-b border-slate-700/60 px-5 py-3 flex items-center gap-4 shrink-0">
@@ -901,7 +911,7 @@ export default function QuestionBuilderPage() {
             className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg border border-slate-600 text-slate-300 transition-colors">
             ↓ Save JSON backup
           </button>
-          <button onClick={() => download('quiz.qpkg', generateQuizPackage(questions))}
+        <button onClick={handleExport}
             className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg border border-blue-500 text-white font-semibold transition-colors">
             ↓ Export Quiz File
           </button>
