@@ -70,6 +70,76 @@ function serializeCell(cell) {
   return { ...cell, locked: true };
 }
 
+function compactGridData(grid, exactAnswer = null, hiddenBlocks = null) {
+  const nWires = grid.length;
+  if (nWires === 0) return { newGrid: grid, newExactAnswer: exactAnswer, newHiddenBlocks: hiddenBlocks };
+  const nSteps = grid[0].length;
+
+  const colsToKeep = [];
+  for (let s = 0; s < nSteps; s++) {
+    let isEmpty = true;
+    for (let w = 0; w < nWires; w++) {
+      if (grid[w][s] !== null) {
+        isEmpty = false;
+        break;
+      }
+    }
+    if (!isEmpty) colsToKeep.push(s);
+  }
+
+  const newGrid = Array.from({ length: nWires }, () => []);
+  const oldToNewStep = {};
+
+  for (let newS = 0; newS < colsToKeep.length; newS++) {
+    const oldS = colsToKeep[newS];
+    oldToNewStep[oldS] = newS;
+    for (let w = 0; w < nWires; w++) {
+      newGrid[w].push(grid[w][oldS]);
+    }
+  }
+
+  let newExactAnswer = exactAnswer;
+  if (exactAnswer) {
+    newExactAnswer = {};
+    for (const [key, gate] of Object.entries(exactAnswer)) {
+      const [wStr, sStr] = key.split('_');
+      const w = Number(wStr);
+      const s = Number(sStr);
+      if (oldToNewStep[s] !== undefined) {
+        if (newGrid[w][oldToNewStep[s]]?.blank) {
+          newExactAnswer[`${w}_${oldToNewStep[s]}`] = gate;
+        }
+      }
+    }
+  }
+
+  let newHiddenBlocks = hiddenBlocks;
+  if (hiddenBlocks && hiddenBlocks.length > 0) {
+    newHiddenBlocks = hiddenBlocks.map(block => {
+      let newStart = newGrid[0].length;
+      for (let s = block.startStep; s < nSteps; s++) {
+        if (oldToNewStep[s] !== undefined) {
+          newStart = oldToNewStep[s];
+          break;
+        }
+      }
+      let newEnd = -1;
+      for (let s = block.endStep; s >= 0; s--) {
+        if (oldToNewStep[s] !== undefined) {
+          newEnd = oldToNewStep[s];
+          break;
+        }
+      }
+      if (newStart > newEnd) {
+        newStart = newEnd = Math.max(0, newEnd);
+      }
+      return { ...block, startStep: newStart, endStep: newEnd };
+    });
+  }
+
+  return { newGrid, newExactAnswer, newHiddenBlocks };
+}
+
 function serializeAnswerCircuit(circuit) {
   const answer = [];
   circuit.forEach((wire, wi) => {
@@ -103,7 +173,7 @@ function serializeQuestion(q, id) {
       }
     }
   });
-  const trimSteps = Math.max(1, lastOcc + 1);
+  const trimSteps = Math.max(0, lastOcc + 1);
   const circuit = q.circuit.map(wire => wire.slice(0, trimSteps).map(serializeCell));
 
   const out = {
@@ -369,7 +439,7 @@ function BuilderCircuitGrid({
           <span className="text-slate-200 w-4 text-center font-medium">{nQubits}</span>
           {onAddWire && <button onClick={onAddWire}    disabled={nQubits >= 10} className={btnCls}>+</button>}
           <span className={onAddWire ? "ml-4" : "ml-2"}>Steps:</span>
-          {onRemoveStep && <button onClick={onRemoveStep} disabled={nSteps <= 1}   className={btnCls}>−</button>}
+          {onRemoveStep && <button onClick={onRemoveStep} disabled={nSteps <= 0}   className={btnCls}>−</button>}
           <span className="text-slate-200 w-4 text-center font-medium">{nSteps}</span>
           {onAddStep && <button onClick={onAddStep}    disabled={nSteps >= 20}  className={btnCls}>+</button>}
         </div>
@@ -440,24 +510,21 @@ function QuestionEditor({ question: q, onChange }) {
 
   function handleCircuitChange(updater) {
     const prevGrid = q.circuit;
-    const newCircuit = typeof updater === 'function' ? updater(prevGrid) : updater;
-    if (newCircuit === prevGrid) return;
-    const newSteps = newCircuit[0].length;
-    const newExact = { ...q.exactAnswer };
-    newCircuit.forEach((wire, w) => {
-      wire.forEach((cell, s) => {
-        if (!cell?.blank) delete newExact[`${w}_${s}`];
-      });
-    });
-    update({ circuit: newCircuit, nSteps: newSteps, exactAnswer: newExact });
+    const newCircuitRaw = typeof updater === 'function' ? updater(prevGrid) : updater;
+    if (newCircuitRaw === prevGrid) return;
+    
+    const { newGrid, newExactAnswer, newHiddenBlocks } = compactGridData(newCircuitRaw, q.exactAnswer, q.hiddenBlocks);
+    
+    update({ circuit: newGrid, nSteps: newGrid[0].length, exactAnswer: newExactAnswer, hiddenBlocks: newHiddenBlocks });
   }
 
   function handleAnswerChange(updater) {
     const prevGrid = q.answerCircuit;
-    const newCircuit = typeof updater === 'function' ? updater(prevGrid) : updater;
-    if (newCircuit === prevGrid) return;
-    const newSteps = newCircuit[0].length;
-    update({ answerCircuit: newCircuit, answerNSteps: newSteps });
+    const newCircuitRaw = typeof updater === 'function' ? updater(prevGrid) : updater;
+    if (newCircuitRaw === prevGrid) return;
+    
+    const { newGrid } = compactGridData(newCircuitRaw);
+    update({ answerCircuit: newGrid, answerNSteps: newGrid[0].length });
   }
 
   // ── Wire / step resize ────────────────────────────────────────────────────
@@ -489,7 +556,7 @@ function QuestionEditor({ question: q, onChange }) {
   }
   function addStep()    { update({ nSteps: q.nSteps + 1, circuit: q.circuit.map(w => [...w, null]) }); }
   function removeStep() {
-    if (q.nSteps <= 1) return;
+    if (q.nSteps <= 0) return;
     const last = q.nSteps - 1;
     const newExact = Object.fromEntries(
       Object.entries(q.exactAnswer).filter(([k]) => Number(k.split('_')[1]) < last)
@@ -498,7 +565,7 @@ function QuestionEditor({ question: q, onChange }) {
   }
   function addAnswerStep()    { update({ answerNSteps: q.answerNSteps + 1, answerCircuit: q.answerCircuit.map(w => [...w, null]) }); }
   function removeAnswerStep() {
-    if (q.answerNSteps <= 1) return;
+    if (q.answerNSteps <= 0) return;
     update({ answerNSteps: q.answerNSteps - 1, answerCircuit: q.answerCircuit.map(w => w.slice(0, -1)) });
   }
 
@@ -605,7 +672,8 @@ function QuestionEditor({ question: q, onChange }) {
         <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Given Circuit</h3>
         <p className="text-xs text-slate-400">
           Drag gates onto the grid. Multi-qubit gates auto-place on adjacent wires — drag the nodes to reposition.
-          Use <span className="font-medium text-slate-300">Blank</span> for slots the student must fill.
+          Use <span className="font-medium text-slate-300">Blank</span> for slots the student must fill. 
+          If you do not want to provide a circuit, set steps = 0. Ensure you do not have blank steps.
         </p>
         <BuilderCircuitGrid
           gridId={`given_${q.id}`}
@@ -679,7 +747,7 @@ function QuestionEditor({ question: q, onChange }) {
             {/* Answer Steps Control */}
             <div className="flex gap-3 items-center flex-wrap text-xs text-slate-400">
               <span>Answer Steps:</span>
-              <button onClick={removeAnswerStep} disabled={q.answerNSteps <= 1} className={btnCls}>−</button>
+              <button onClick={removeAnswerStep} disabled={q.answerNSteps <= 0} className={btnCls}>−</button>
               <span className="text-slate-200 w-4 text-center font-medium">{q.answerNSteps}</span>
               <button onClick={addAnswerStep} disabled={q.answerNSteps >= 20} className={btnCls}>+</button>
             </div>
@@ -798,7 +866,7 @@ export default function QuestionBuilderPage() {
         if (Array.isArray(data) && data.length > 0) {
           const syncedData = data.map(q => {
             let ac = q.answerCircuit || [[null]];
-            while (ac.length < (q.nQubits || 1)) ac.push(Array(q.answerNSteps || 1).fill(null));
+            while (ac.length < (q.nQubits ?? 1)) ac.push(Array(q.answerNSteps ?? 1).fill(null));
             
             let exactAnswer = q.exactAnswer || {};
             if (q.restrictToBlanks && q.answer && Object.keys(exactAnswer).length === 0) {
