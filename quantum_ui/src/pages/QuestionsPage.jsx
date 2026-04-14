@@ -385,10 +385,54 @@ export default function QuestionsPage() {
             return prev;
           }
 
+          if (source.data.type === 'gate' && cell?.blank && (!cell.name || cell.name === 'BLANK')) {
+            return prev.map((w, wi) => w.map((c, si) => 
+              (wi === wireIndex && si === stepIndex && c?.blank) ? { ...c, filled: source.data.name } : c
+            ));
+          }
+
           if (question.restrictToBlanks) {
             const isCnotSwap = source.data.type === 'cnot-node' && dest.data.type === 'cnot-node-drop' && source.data.peerWire === dest.data.wireIndex && source.data.stepIndex === dest.data.stepIndex;
             const isToffoliSwap = source.data.type === 'toffoli-node' && dest.data.type === 'cnot-node-drop' && dest.data.stepIndex === source.data.stepIndex && (source.data.controls?.includes(dest.data.wireIndex) || source.data.targetWire === dest.data.wireIndex);
             
+            if (isToffoliSwap) {
+              return prev.map((w, wi) => w.map((c, si) => {
+                if (si !== source.data.stepIndex || !c || c.name !== 'BLANK_3') return c;
+                const oldWire = source.data.wireIndex;
+                const swapWire = dest.data.wireIndex;
+                const oldRole = prev[oldWire][si].role;
+                const swapRole = prev[swapWire][si].role;
+                if (oldRole === swapRole) return c;
+                
+                let newControls = [...source.data.controls];
+                if (oldRole === 'control') newControls = [swapWire, newControls.find(cw => cw !== oldWire)];
+                else newControls = [oldWire, newControls.find(cw => cw !== swapWire)];
+                const newTarget = oldRole === 'control' ? oldWire : swapWire;
+                
+                if (wi === oldWire) return { ...c, role: swapRole, controls: newControls, targetWire: newTarget };
+                if (wi === swapWire) return { ...c, role: oldRole, controls: newControls, targetWire: newTarget };
+                if (newControls.includes(wi) || newTarget === wi) return { ...c, controls: newControls, targetWire: newTarget };
+                return c;
+              }));
+            }
+
+            if (isCnotSwap) {
+              return prev.map((w, wi) => w.map((c, si) => {
+                if (si !== source.data.stepIndex || !c || c.name !== 'BLANK_2') return c;
+                const oldWire = source.data.wireIndex;
+                const peerWire = source.data.peerWire;
+                if (wi === oldWire) {
+                  const role = source.data.role === 'control' ? 'target' : 'control';
+                  return { ...c, role, [role === 'control' ? 'controlWire' : 'targetWire']: undefined, [role === 'control' ? 'targetWire' : 'controlWire']: peerWire };
+                }
+                if (wi === peerWire) {
+                  const role = source.data.role;
+                  return { ...c, role, [role === 'control' ? 'controlWire' : 'targetWire']: undefined, [role === 'control' ? 'targetWire' : 'controlWire']: oldWire };
+                }
+                return c;
+              }));
+            }
+
             if (dest.data.type === 'gate-insert' || (dest.data.type === 'cnot-node-drop' && !isCnotSwap && !isToffoliSwap)) {
               return prev;
             }
@@ -466,20 +510,27 @@ export default function QuestionsPage() {
               if (!originalCell) return false;
 
           if (cell.name === 'BLANK_2' || cell.name === 'BLANK_3') {
+            const isSymmetric = cell.filled === 'CZ';
+            if (!isSymmetric) {
+              if (cell.name === 'BLANK_2') {
                 if (cell.role !== originalCell.role) return false;
                 if (cell.targetWire !== originalCell.targetWire) return false;
                 if (cell.controlWire !== originalCell.controlWire) return false;
-                
+              } else if (cell.name === 'BLANK_3') {
+                if (cell.role !== originalCell.role) return false;
+                if (cell.targetWire !== originalCell.targetWire) return false;
                 if (cell.controls || originalCell.controls) {
                   if (!cell.controls || !originalCell.controls) return false;
                   const c1 = [...cell.controls].sort((a, b) => a - b);
                   const c2 = [...originalCell.controls].sort((a, b) => a - b);
                   if (c1[0] !== c2[0] || c1[1] !== c2[1]) return false;
                 }
+              }
+            }
 
-            // Only check once per multi-qubit blank (at the control wire)
-            if (cell.role !== 'control') continue;
-            if (cell.name === 'BLANK_3' && cell.controls && cell.controls[0] !== w) continue;
+            // Only check once per multi-qubit blank (at the original control wire)
+            if (originalCell.role !== 'control') continue;
+            if (originalCell.name === 'BLANK_3' && originalCell.controls && originalCell.controls[0] !== w) continue;
           }
 
               const expected = (question.answer || []).find(a => a.wireIndex === w && a.stepIndex === s);
