@@ -255,12 +255,47 @@ function BuilderCircuitGrid({
   onCellsChange,
   onAddWire, onRemoveWire, onAddStep, onRemoveStep,
   showBlanks, paletteGates,
+  readOnly = false,
+  hideWireLabels = false,
+  stepOffset = 0,
+  hideControls = false
 }) {
   function removeCell(w, s) {
-    onCellsChange(prev => removeGateFromCircuit(prev, w, s));
+    if (readOnly) return;
+    onCellsChange(prev => {
+      const cell = prev[w]?.[s];
+      if (!cell) return prev;
+      
+      if (cell.blank) {
+        const next = prev.map(wire => [...wire]);
+        if (cell.name === 'BLANK_2') {
+          const peer = cell.role === 'control' ? cell.targetWire : cell.controlWire;
+          next[w][s] = null;
+          if (peer != null) next[peer][s] = null;
+        } else if (cell.name === 'BLANK_3') {
+          next[w][s] = null;
+          if (cell.role === 'control') {
+            const peerC = cell.controls?.find(c => c !== w);
+            if (peerC != null) next[peerC][s] = null;
+            if (cell.targetWire != null) next[cell.targetWire][s] = null;
+          } else {
+            if (cell.controls) {
+              next[cell.controls[0]][s] = null;
+              next[cell.controls[1]][s] = null;
+            }
+          }
+        } else {
+          next[w][s] = null;
+        }
+        return next;
+      }
+      
+      return removeGateFromCircuit(prev, w, s);
+    });
   }
 
   useEffect(() => {
+    if (readOnly) return;
     return monitorForElements({
       onDrop({ source, location }) {
         const [dest] = location.current.dropTargets;
@@ -302,38 +337,42 @@ function BuilderCircuitGrid({
   const btnCls = 'w-6 h-6 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center justify-center text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
   return (
-    <div data-grid-id={gridId}>
+    <div data-grid-id={gridId} className={readOnly ? 'opacity-70 pointer-events-none select-none' : ''}>
       {/* ── Gate palette ─────────────────────────────────────────────────── */}
-      <div className="flex gap-2 flex-wrap items-end mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/40">
-        <span className="text-[10px] text-slate-500 uppercase tracking-widest self-center mr-1">Palette</span>
-        {showBlanks && (
-          <>
-            <BuilderPaletteGate gateName="BLANK" />
-            <BuilderPaletteGate gateName="BLANK_2" />
-            <BuilderPaletteGate gateName="BLANK_3" />
-          </>
-        )}
-        {paletteGates.map(g => <BuilderPaletteGate key={g} gateName={g} />)}
-      </div>
+      {!readOnly && !hideControls && (
+        <div className="flex gap-2 flex-wrap items-end mb-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/40">
+          <span className="text-[10px] text-slate-500 uppercase tracking-widest self-center mr-1">Palette</span>
+          {showBlanks && (
+            <>
+              <BuilderPaletteGate gateName="BLANK" />
+              <BuilderPaletteGate gateName="BLANK_2" />
+              <BuilderPaletteGate gateName="BLANK_3" />
+            </>
+          )}
+          {paletteGates.map(g => <BuilderPaletteGate key={g} gateName={g} />)}
+        </div>
+      )}
 
       {/* ── Grid controls ─────────────────────────────────────────────────── */}
-      <div className="flex gap-3 mb-4 items-center flex-wrap text-xs text-slate-400">
-        <span>Qubits:</span>
-        {onRemoveWire && <button onClick={onRemoveWire} disabled={nQubits <= 1}  className={btnCls}>−</button>}
-        <span className="text-slate-200 w-4 text-center font-medium">{nQubits}</span>
-        {onAddWire && <button onClick={onAddWire}    disabled={nQubits >= 10} className={btnCls}>+</button>}
-        <span className={onAddWire ? "ml-4" : "ml-2"}>Steps:</span>
-        {onRemoveStep && <button onClick={onRemoveStep} disabled={nSteps <= 1}   className={btnCls}>−</button>}
-        <span className="text-slate-200 w-4 text-center font-medium">{nSteps}</span>
-        {onAddStep && <button onClick={onAddStep}    disabled={nSteps >= 20}  className={btnCls}>+</button>}
-      </div>
+      {!readOnly && !hideControls && (
+        <div className="flex gap-3 mb-4 items-center flex-wrap text-xs text-slate-400">
+          <span>Qubits:</span>
+          {onRemoveWire && <button onClick={onRemoveWire} disabled={nQubits <= 1}  className={btnCls}>−</button>}
+          <span className="text-slate-200 w-4 text-center font-medium">{nQubits}</span>
+          {onAddWire && <button onClick={onAddWire}    disabled={nQubits >= 10} className={btnCls}>+</button>}
+          <span className={onAddWire ? "ml-4" : "ml-2"}>Steps:</span>
+          {onRemoveStep && <button onClick={onRemoveStep} disabled={nSteps <= 1}   className={btnCls}>−</button>}
+          <span className="text-slate-200 w-4 text-center font-medium">{nSteps}</span>
+          {onAddStep && <button onClick={onAddStep}    disabled={nSteps >= 20}  className={btnCls}>+</button>}
+        </div>
+      )}
 
       {/* ── Circuit grid ─────────────────────────────────────────────────── */}
       <div className="overflow-x-auto pb-2">
         {/* Step labels */}
-        <div className="flex mb-1 ml-14">
+        <div className={`flex mb-1 ${hideWireLabels ? 'ml-1' : 'ml-14'}`}>
           {Array.from({ length: nSteps }, (_, s) => (
-            <div key={s} className="w-14 text-center text-[10px] text-slate-600 mr-2">Step {s}</div>
+            <div key={s} className="w-14 text-center text-[10px] text-slate-600 mr-2">Step {s + stepOffset}</div>
           ))}
         </div>
 
@@ -341,9 +380,11 @@ function BuilderCircuitGrid({
         <div className="flex flex-col gap-2 mt-2">
           {Array.from({ length: nQubits }, (_, w) => (
             <div key={w} className="flex items-center">
-              <div className="w-12 shrink-0 text-xs text-slate-500 text-right pr-2 font-mono">q[{w}]</div>
+              {!hideWireLabels && (
+                <div className="w-12 shrink-0 text-xs text-slate-500 text-right pr-2 font-mono">q[{w}]</div>
+              )}
 
-              <div className="relative flex items-center py-2 px-1">
+              <div className={`relative flex items-center py-2 ${hideWireLabels ? 'pr-1' : 'px-1'}`}>
                 {/* Horizontal wire line */}
                 <div className="absolute left-0 right-0 h-px bg-slate-600 z-0" />
 
@@ -355,7 +396,14 @@ function BuilderCircuitGrid({
                       wireIndex={w} stepIndex={s}
                       onDelete={(w, s) => removeCell(w, s)}
                       customRenderer={(cell, cw, cs) => {
-                        if (cell && cell.blank && (!cell.name || cell.name === 'BLANK')) {
+                        if (readOnly && cell && cell.blank) {
+                          return (
+                            <div className="w-full h-full border-2 border-dashed border-slate-500 bg-slate-800/30 rounded flex items-center justify-center opacity-40">
+                              <span className="text-xl font-mono text-slate-600">?</span>
+                            </div>
+                          );
+                        }
+                        if (!readOnly && cell && cell.blank && (!cell.name || cell.name === 'BLANK')) {
                           return <DraggableBlankSlot
                             wireIndex={cw} stepIndex={cs}
                             handleRightClickDelete={(e, w2, s2) => { e.preventDefault(); removeCell(w2, s2); }}
@@ -378,6 +426,8 @@ function BuilderCircuitGrid({
 // ─── QuestionEditor ───────────────────────────────────────────────────────────
 
 function QuestionEditor({ question: q, onChange }) {
+  const btnCls = 'w-6 h-6 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 flex items-center justify-center text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+
   function update(patch) { onChange({ ...q, ...patch }); }
 
   function handleCircuitChange(updater) {
@@ -604,21 +654,53 @@ function QuestionEditor({ question: q, onChange }) {
         )}
 
         {!q.restrictToBlanks && (
-          <>
+          <div className="space-y-4">
             <p className="text-xs text-slate-400">
               Build the reference answer circuit using only the gates students are allowed. Any circuit producing the same state is accepted.
             </p>
             {answerPalette.length === 0 && (
               <p className="text-xs text-amber-400">No allowed gates selected above — enable some gates first.</p>
             )}
-            <BuilderCircuitGrid
-              gridId={`answer_${q.id}`}
-              nQubits={q.answerNQubits} nSteps={q.answerNSteps} circuit={q.answerCircuit}
-              onCellsChange={handleAnswerChange}
-              onAddStep={addAnswerStep} onRemoveStep={removeAnswerStep}
-              showBlanks={false} paletteGates={answerPalette}
-            />
-          </>
+
+            {/* Answer Palette */}
+            <div className="flex gap-2 flex-wrap items-end p-3 bg-slate-900/50 rounded-lg border border-slate-700/40">
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest self-center mr-1">Answer Palette</span>
+              {answerPalette.map(g => <BuilderPaletteGate key={g} gateName={g} />)}
+            </div>
+
+            {/* Answer Steps Control */}
+            <div className="flex gap-3 items-center flex-wrap text-xs text-slate-400">
+              <span>Answer Steps:</span>
+              <button onClick={removeAnswerStep} disabled={q.answerNSteps <= 1} className={btnCls}>−</button>
+              <span className="text-slate-200 w-4 text-center font-medium">{q.answerNSteps}</span>
+              <button onClick={addAnswerStep} disabled={q.answerNSteps >= 20} className={btnCls}>+</button>
+            </div>
+
+            {/* Combined Grid Visual */}
+            <div className="flex items-start overflow-x-auto bg-slate-900/40 p-4 rounded-xl border border-slate-700/50">
+              <div className="shrink-0 border-r-2 border-slate-600/50 pr-4 mr-2">
+                <BuilderCircuitGrid
+                  gridId={`given_readonly_${q.id}`}
+                  nQubits={q.nQubits} nSteps={q.nSteps} circuit={q.circuit}
+                  onCellsChange={() => {}}
+                  showBlanks={false} paletteGates={[]}
+                  readOnly={true}
+                  hideControls={true}
+                />
+              </div>
+              <div className="shrink-0">
+                <BuilderCircuitGrid
+                  gridId={`answer_${q.id}`}
+                  nQubits={q.answerNQubits} nSteps={q.answerNSteps} circuit={q.answerCircuit}
+                  onCellsChange={handleAnswerChange}
+                  showBlanks={false} paletteGates={answerPalette}
+                  hideWireLabels={true}
+                  stepOffset={q.nSteps}
+                  hideControls={true}
+                />
+              </div>
+            </div>
+          </div>
         )}
       </section>
 
