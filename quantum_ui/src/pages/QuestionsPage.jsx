@@ -16,6 +16,10 @@ import { simulateCircuit } from '../utils/simulateCircuit.js';
 import { applyGateDrop, TWO_WIRE, removeGateFromCircuit, insertColumnIfOccupied } from '../utils/circuitDnD.js';
 import { compactCircuit } from '../utils/compactCircuit.js';
 import { decodeStudentPackage } from '../utils/questionPackage.js';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 // ─── Small display components ────────────────────────────────────────────────
 
@@ -792,7 +796,15 @@ export default function QuestionsPage() {
               <span className="text-slate-600"> · {question.points} points</span>
             </p>
             <h2 className="text-xl font-bold text-white mb-2">{question.title}</h2>
-            <p className="text-sm text-slate-400 max-w-lg leading-relaxed">{question.description}</p>
+            <div className="text-sm text-slate-400 max-w-lg leading-relaxed">
+              <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={{ p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} /> }}
+              >
+                {question.description}
+              </ReactMarkdown>
+            </div>
             {/* Label for equivalent-circuit questions */}
             {!question.restrictToBlanks && separatorStep != null && (
               <p className="text-[10px] text-slate-600 mt-1">

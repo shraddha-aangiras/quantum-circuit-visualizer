@@ -19,6 +19,10 @@ import DraggablePlacedGate from '../components/DraggablePlacedGate';
 import DropZone from '../components/DropZone';
 import CircuitCell from '../components/CircuitCell';
 import { encodeStudentPackage } from '../utils/questionPackage';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -633,6 +637,18 @@ function QuestionEditor({ question: q, onChange }) {
           <textarea value={q.description} onChange={e => update({ description: e.target.value })}
             rows={3} placeholder="Explain what the student needs to do..."
             className={inputCls + ' resize-none'} />
+          {q.description && (
+            <div className="mt-2 p-3 bg-slate-950/50 rounded-lg border border-slate-700/50 text-sm text-slate-400">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Preview</p>
+              <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={{ p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} /> }}
+              >
+                {q.description}
+              </ReactMarkdown>
+            </div>
+          )}
         </div>
         <div className="flex gap-6 items-end flex-wrap">
           <div>
