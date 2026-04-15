@@ -867,7 +867,7 @@ export default function QuestionBuilderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-300 flex flex-col font-sans" style={{ colorScheme: 'dark' }}>
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
       <header className="bg-slate-800 border-b border-slate-700/60 px-5 py-3 flex items-center gap-4 shrink-0">
         <Link to="/questions" className="text-slate-500 hover:text-slate-300 text-xs transition-colors">← Questions</Link>
         <span className="text-slate-700 select-none">|</span>

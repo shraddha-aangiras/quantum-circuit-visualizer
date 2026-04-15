@@ -16,6 +16,7 @@ import DraggableBarrier from './components/DraggableBarrier';
 import CircuitCell from './components/CircuitCell';
 import DropZone from './components/DropZone';
 import ResultsPanel from './components/ResultsPanel';
+import './App.css'
 
 function App() {
   const [circuit, setCircuit] = useState([
@@ -561,7 +562,7 @@ function App() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="fixed inset-0 flex font-sans text-slate-300 bg-slate-950" style={{ colorScheme: 'dark' }}>
+    <div className="fixed inset-0 flex font-sans text-slate-300 bg-slate-950">
 
       {/* Left sidebar */}
       <aside className="w-55 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-10">
