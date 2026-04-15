@@ -57,17 +57,68 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
   const sIdx = destData.stepIndex;
 
   const isOccupied = (w, s) => next[w]?.[s] != null && !next[w][s].blank;
+  const isMeasured = (w) => prevCircuit[w]?.some(c => c?.name === 'MEASURE' || (c?.blank && c?.filled === 'MEASURE')) ?? false;
 
   // 1. Dropping onto a question-blank slot (Questions tab)
   if (destData.type === 'question-blank') {
     if (sourceData.type === 'gate') {
       const gateName = sourceData.name;
-      if (!TWO_WIRE.includes(gateName) && gateName !== 'TOFFOLI') {
+      if (!TWO_WIRE.includes(gateName) && gateName !== 'TOFFOLI' && gateName !== 'BARRIER') {
         next[wIdx][sIdx] = { blank: true, filled: gateName };
         return next;
       }
     }
     return prevCircuit;
+  }
+
+  // Handle BARRIER
+  if (sourceData.type === 'gate' && sourceData.name === 'BARRIER' && destData.type === 'slot') {
+    const numW = next.length;
+    const allWires = Array.from({ length: numW }, (_, i) => i);
+    insertColumnIfOccupied(next, sIdx, allWires);
+    for (let w = 0; w < numW; w++) {
+      next[w][sIdx] = { name: 'BARRIER', topWire: 0, bottomWire: numW - 1 };
+    }
+    return next;
+  }
+
+  if (sourceData.type === 'barrier' && destData.type === 'slot') {
+    const { topWire, bottomWire, stepIndex: oldStep } = sourceData;
+    if (oldStep === sIdx) return prevCircuit;
+    
+    for (let w = topWire; w <= bottomWire; w++) next[w][oldStep] = null;
+    
+    const barrierWires = Array.from({ length: bottomWire - topWire + 1 }, (_, i) => topWire + i);
+    insertColumnIfOccupied(next, sIdx, barrierWires);
+
+    for (let w = topWire; w <= bottomWire; w++) {
+      next[w][sIdx] = { name: 'BARRIER', topWire, bottomWire };
+    }
+    return next;
+  }
+
+  if (sourceData.type === 'barrier-end' && (destData.type === 'slot' || destData.type === 'gate-insert')) {
+    const { role, topWire, bottomWire, stepIndex: barrStep } = sourceData;
+    if (sIdx !== barrStep) return prevCircuit;
+
+    let newTop = topWire;
+    let newBottom = bottomWire;
+    if (role === 'top') {
+      newTop = Math.min(wIdx, bottomWire);
+    } else {
+      newBottom = Math.max(wIdx, topWire);
+    }
+    if (newTop === topWire && newBottom === bottomWire) return prevCircuit;
+
+    for (let w = topWire; w <= bottomWire; w++) next[w][barrStep] = null;
+
+    const newSpanWires = Array.from({ length: newBottom - newTop + 1 }, (_, i) => newTop + i);
+    insertColumnIfOccupied(next, barrStep, newSpanWires);
+
+    for (let w = newTop; w <= newBottom; w++) {
+      next[w][barrStep] = { name: 'BARRIER', topWire: newTop, bottomWire: newBottom };
+    }
+    return next;
   }
 
   // 2. Handle Multi-Qubit Node Swaps
@@ -84,11 +135,13 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
     destData.stepIndex === sourceData.stepIndex;
 
   if (isToffoliSwap) {
+    const oldWire = sourceData.wireIndex;
+    const swapWire = destData.wireIndex;
+    if (isMeasured(oldWire) || isMeasured(swapWire)) return prevCircuit;
+
     const _tOld  = next[sourceData.wireIndex]?.[sourceData.stepIndex];
     const _tSwap = next[destData.wireIndex]?.[sourceData.stepIndex];
 
-    const oldWire = sourceData.wireIndex;
-    const swapWire = destData.wireIndex;
     const step = sourceData.stepIndex;
     const oldRole = _tOld.role;
     const swapRole = _tSwap.role;
@@ -110,12 +163,23 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
   }
 
   if (isCnotSwap) {
-    const _cOld  = next[sourceData.wireIndex]?.[sourceData.stepIndex];
-    const _cPeer = next[sourceData.peerWire]?.[sourceData.stepIndex];
-
+    const isClassical = ['FF_x', 'FF_Z'].includes(sourceData.name);
     const oldWire = sourceData.wireIndex;
     const peerWire = sourceData.peerWire;
     const step = sourceData.stepIndex;
+
+    if (sourceData.role === 'control') {
+      if (isMeasured(oldWire)) return prevCircuit;
+      if (isClassical && !isMeasured(peerWire)) return prevCircuit;
+      if (!isClassical && isMeasured(peerWire)) return prevCircuit;
+    } else {
+      if (isClassical && !isMeasured(oldWire)) return prevCircuit;
+      if (!isClassical && isMeasured(oldWire)) return prevCircuit;
+      if (isMeasured(peerWire)) return prevCircuit;
+    }
+
+    const _cOld  = next[sourceData.wireIndex]?.[sourceData.stepIndex];
+    const _cPeer = next[sourceData.peerWire]?.[sourceData.stepIndex];
 
     if (_cOld?.blank && _cPeer?.blank) {
       // Swap roles within blank structure (immutable, preserves blank:true etc.)
@@ -161,6 +225,34 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
       return prevCircuit;
     }
 
+    if (sourceData.type === 'gate') {
+      const gateName = sourceData.name;
+      const isClassical = ['FF_x', 'FF_Z'].includes(gateName);
+      if (TWO_WIRE.includes(gateName)) {
+        const tIdx = targetWire < next.length - 1 ? targetWire + 1 : targetWire - 1;
+        if (tIdx >= 0 && tIdx < next.length) {
+          if (isClassical && !isMeasured(targetWire)) return prevCircuit;
+          if (!isClassical && isMeasured(targetWire)) return prevCircuit;
+          if (isMeasured(tIdx)) return prevCircuit;
+        }
+      } else if (gateName === 'TOFFOLI') {
+        if (next.length >= 3) {
+          const { c2, target: tIdx } = findToffoliWires(targetWire, next.length);
+          if (isMeasured(targetWire) || isMeasured(c2) || isMeasured(tIdx)) return prevCircuit;
+        }
+      }
+    } else if (sourceData.type === 'cnot-node') {
+      const isClassical = ['FF_x', 'FF_Z'].includes(sourceData.name);
+      if (sourceData.role === 'control') {
+        if (isClassical && !isMeasured(targetWire)) return prevCircuit;
+        if (!isClassical && isMeasured(targetWire)) return prevCircuit;
+      } else {
+        if (isMeasured(targetWire)) return prevCircuit;
+      }
+    } else if (sourceData.type === 'toffoli-node') {
+      if (isMeasured(targetWire)) return prevCircuit;
+    }
+
     if (sourceData.type === 'placed-gate') {
       next[sourceData.wireIndex][sourceData.stepIndex] = null;
     } else if (sourceData.type === 'cnot-node') {
@@ -170,6 +262,10 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
       next[sourceData.controls[0]][sourceData.stepIndex] = null;
       next[sourceData.controls[1]][sourceData.stepIndex] = null;
       next[sourceData.targetWire][sourceData.stepIndex] = null;
+    } else if (sourceData.type === 'barrier') {
+      for (let w = sourceData.topWire; w <= sourceData.bottomWire; w++) {
+        next[w][sourceData.stepIndex] = null;
+      }
     }
 
     next.forEach(wire => wire.splice(insertStep, 0, null));
@@ -188,6 +284,11 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
         }
       } else if (gateName === 'BLANK') {
         next[targetWire][insertStep] = { blank: true };
+      } else if (gateName === 'BARRIER') {
+        const numW = next.length;
+        for (let w = 0; w < numW; w++) {
+          next[w][insertStep] = { name: 'BARRIER', topWire: 0, bottomWire: numW - 1 };
+        }
       } else {
         next[targetWire][insertStep] = { name: gateName };
       }
@@ -206,6 +307,11 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
       next[sourceData.controls[0]][insertStep] = { name: sourceData.name, role: 'control', controls: sourceData.controls, targetWire: sourceData.targetWire };
       next[sourceData.controls[1]][insertStep] = { name: sourceData.name, role: 'control', controls: sourceData.controls, targetWire: sourceData.targetWire };
       next[sourceData.targetWire][insertStep] = { name: sourceData.name, role: 'target', controls: sourceData.controls, targetWire: sourceData.targetWire };
+    } else if (sourceData.type === 'barrier') {
+      const { topWire, bottomWire } = sourceData;
+      for (let w = topWire; w <= bottomWire; w++) {
+        next[w][insertStep] = { name: 'BARRIER', topWire, bottomWire };
+      }
    }
     return next;
   }
@@ -214,9 +320,14 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
   if (destData.type === 'slot') {
     if (sourceData.type === 'gate') {
       const gateName = sourceData.name;
+      const isClassical = ['FF_x', 'FF_Z'].includes(gateName);
       if (TWO_WIRE.includes(gateName)) {
         const tIdx = wIdx < next.length - 1 ? wIdx + 1 : wIdx - 1;
         if (tIdx >= 0 && tIdx < next.length && !isOccupied(wIdx, sIdx) && !isOccupied(tIdx, sIdx)) {
+          if (isClassical && !isMeasured(wIdx)) return prevCircuit;
+          if (!isClassical && isMeasured(wIdx)) return prevCircuit;
+          if (isMeasured(tIdx)) return prevCircuit;
+
           writeTwoWireGateCells(next, Math.min(wIdx, tIdx), Math.max(wIdx, tIdx), sIdx, gateName);
           return next;
         }
@@ -224,6 +335,7 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
         if (next.length >= 3) {
           const { c2, target: tIdx } = findToffoliWires(wIdx, next.length);
           if (!isOccupied(wIdx, sIdx) && !isOccupied(c2, sIdx) && !isOccupied(tIdx, sIdx)) {
+            if (isMeasured(wIdx) || isMeasured(c2) || isMeasured(tIdx)) return prevCircuit;
             writeToffoliGateCells(next, wIdx, c2, tIdx, sIdx);
             return next;
           }
@@ -233,7 +345,7 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
           next[wIdx][sIdx] = { blank: true };
           return next;
         }
-      } else {
+      } else if (gateName !== 'BARRIER') {
         if (!isOccupied(wIdx, sIdx)) {
           next[wIdx][sIdx] = { name: gateName };
           return next;
@@ -253,7 +365,15 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
 
     if (sourceData.type === 'cnot-node') {
       const { wireIndex: oldW, stepIndex: oldS, name, role, peerWire } = sourceData;
+      const isClassical = ['FF_x', 'FF_Z'].includes(name);
       if (sIdx === oldS && !isOccupied(wIdx, sIdx) && wIdx !== peerWire) {
+        if (role === 'control') {
+          if (isClassical && !isMeasured(wIdx)) return prevCircuit;
+          if (!isClassical && isMeasured(wIdx)) return prevCircuit;
+        } else {
+          if (isMeasured(wIdx)) return prevCircuit;
+        }
+
         next[oldW][oldS] = null;
         next[wIdx][sIdx] = { name, role, [role === 'control' ? 'targetWire' : 'controlWire']: peerWire };
         next[peerWire][sIdx][role === 'control' ? 'controlWire' : 'targetWire'] = wIdx;
@@ -265,6 +385,7 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
     if (sourceData.type === 'toffoli-node') {
       const { wireIndex: oldW, stepIndex: oldS, name, role, controls, targetWire } = sourceData;
       if (sIdx === oldS && !isOccupied(wIdx, sIdx)) {
+        if (isMeasured(wIdx)) return prevCircuit;
         if (role === 'control' && wIdx !== targetWire && wIdx !== controls.find(c => c !== oldW)) {
           next[oldW][oldS] = null;
           const otherC = controls.find(c => c !== oldW);

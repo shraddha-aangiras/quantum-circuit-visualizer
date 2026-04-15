@@ -13,7 +13,7 @@ import DraggablePlacedGate from '../components/DraggablePlacedGate';
 import DraggableCnotNode from '../components/DraggableCnotNode';
 import initQuantumEngine from '../wasm/quantum_engine.js';
 import { simulateCircuit } from '../utils/simulateCircuit.js';
-import { applyGateDrop, TWO_WIRE, removeGateFromCircuit } from '../utils/circuitDnD.js';
+import { applyGateDrop, TWO_WIRE, removeGateFromCircuit, insertColumnIfOccupied } from '../utils/circuitDnD.js';
 import { compactCircuit } from '../utils/compactCircuit.js';
 import { decodeStudentPackage } from '../utils/questionPackage.js';
 
@@ -58,7 +58,7 @@ function FilledBlankGate({ gateName, onClear }) {
  * to mark the boundary between the "given" question circuit and the
  * student-editable area (used for restrictToBlanks: false questions).
  */
-function QuestionCircuit({ circuitState, hiddenBlocks, restrictToBlanks, onDelete, separatorStep, selectedQubit, onWireClick }) {
+function QuestionCircuit({ circuitState, hiddenBlocks, restrictToBlanks, onDelete, separatorStep, selectedQubit, onWireClick, hoveredBarrier, onHoverBarrier, onResizeBarrier }) {
   const customRenderer = useCallback((cell, wireIndex, stepIndex) => {
     if (!cell) {
       if (restrictToBlanks) return null;
@@ -144,6 +144,10 @@ function QuestionCircuit({ circuitState, hiddenBlocks, restrictToBlanks, onDelet
                     stepIndex={stepIndex}
                     customRenderer={customRenderer}
                     onDelete={onDelete}
+                    onRightClickDelete={(e, w, s) => { e.preventDefault(); onDelete(w, s); }}
+                    hoveredBarrier={hoveredBarrier}
+                    onHoverBarrier={onHoverBarrier}
+                    onResizeBarrier={onResizeBarrier}
                   />
                 </div>
               );
@@ -259,6 +263,7 @@ export default function QuestionsPage() {
   const [simResults, setSimResults] = useState(null);
   const [shots, setShots] = useState(100);
   const [selectedQubit, setSelectedQubit] = useState(null);
+  const [hoveredBarrier, setHoveredBarrier] = useState(null);
 
   // ── Helper: reset everything for a given question set ──────────────────────
   function startQuiz(qs) {
@@ -318,6 +323,7 @@ export default function QuestionsPage() {
     setFeedback(null);
     setAnswerRevealed(false);
     setSelectedQubit(null);
+    setHoveredBarrier(null);
   }, [questionIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-expand circuit state to always have empty buffer slots at the end ──
@@ -357,15 +363,25 @@ export default function QuestionsPage() {
           if (source.data.type === 'gate' && cell?.blank && (cell.name === 'BLANK_2' || cell.name === 'BLANK_3')) {
             const is2Wire = TWO_WIRE.includes(source.data.name);
             const is3Wire = source.data.name === 'TOFFOLI';
+            const isClassical = ['FF_x', 'FF_Z'].includes(source.data.name);
+            
+            const isMeasured = (w) => prev[w]?.some(c => c?.name === 'MEASURE' || (c?.blank && c?.filled === 'MEASURE')) ?? false;
+
             if ((cell.name === 'BLANK_2' && is2Wire) || (cell.name === 'BLANK_3' && is3Wire)) {
               const involvedWires = [];
               if (cell.name === 'BLANK_2') {
                 involvedWires.push(wireIndex);
                 involvedWires.push(cell.role === 'control' ? cell.targetWire : cell.controlWire);
+                const cWire = cell.role === 'control' ? wireIndex : cell.controlWire;
+                const tWire = cell.role === 'target' ? wireIndex : cell.targetWire;
+                if (isClassical && !isMeasured(cWire)) return prev;
+                if (!isClassical && isMeasured(cWire)) return prev;
+                if (isMeasured(tWire)) return prev;
               } else if (cell.name === 'BLANK_3') {
                 involvedWires.push(cell.targetWire);
                 involvedWires.push(cell.controls[0]);
                 involvedWires.push(cell.controls[1]);
+                if (isMeasured(cell.targetWire) || isMeasured(cell.controls[0]) || isMeasured(cell.controls[1])) return prev;
               }
               involvedWires.sort((a, b) => a - b);
 
@@ -482,6 +498,33 @@ export default function QuestionsPage() {
       return question.restrictToBlanks ? next : compactCircuit(next);
     });
     setFeedback(null);
+  }, [question]);
+
+  // ── Barrier Resize ─────────────────────────────────────────────────────────
+  const resizeBarrier = useCallback((wireIndex, stepIndex, action) => {
+    if (question.restrictToBlanks) return;
+    setCircuitState(prev => {
+      const newCircuit = prev.map(wire => [...wire]);
+      const cell = newCircuit[wireIndex][stepIndex];
+      if (!cell || cell.name !== 'BARRIER' || cell.locked) return prev;
+
+      for (let w = cell.topWire; w <= cell.bottomWire; w++) newCircuit[w][stepIndex] = null;
+
+      let newTop = cell.topWire;
+      let newBottom = cell.bottomWire;
+      if (action === 'extendTop')    newTop    = Math.max(0, newTop - 1);
+      if (action === 'shrinkTop')    newTop    = Math.min(newTop + 1, newBottom);
+      if (action === 'extendBottom') newBottom = Math.min(prev.length - 1, newBottom + 1);
+      if (action === 'shrinkBottom') newBottom = Math.max(newBottom - 1, newTop);
+
+      const newSpanWires = Array.from({ length: newBottom - newTop + 1 }, (_, i) => newTop + i);
+      insertColumnIfOccupied(newCircuit, stepIndex, newSpanWires);
+
+      for (let w = newTop; w <= newBottom; w++) {
+        newCircuit[w][stepIndex] = { name: 'BARRIER', topWire: newTop, bottomWire: newBottom };
+      }
+      return compactCircuit(newCircuit);
+    });
   }, [question]);
 
   // ── Check answer ─────────────────────────────────────────────────────────────
@@ -768,6 +811,9 @@ export default function QuestionsPage() {
               separatorStep={separatorStep}
               selectedQubit={selectedQubit}
               onWireClick={wi => setSelectedQubit(prev => prev === wi ? null : wi)}
+              hoveredBarrier={hoveredBarrier}
+              onHoverBarrier={setHoveredBarrier}
+              onResizeBarrier={resizeBarrier}
             />
           </div>
 

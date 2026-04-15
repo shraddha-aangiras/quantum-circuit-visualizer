@@ -13,7 +13,7 @@ import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-d
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import GateVisual from '../components/GateVisual';
 import { GATE_STYLES } from '../constants';
-import { applyGateDrop, TWO_WIRE, removeGateFromCircuit, removeWireFromGrid } from '../utils/circuitDnD';
+import { applyGateDrop, TWO_WIRE, removeGateFromCircuit, removeWireFromGrid, insertColumnIfOccupied } from '../utils/circuitDnD';
 import DraggableCnotNode from '../components/DraggableCnotNode';
 import DraggablePlacedGate from '../components/DraggablePlacedGate';
 import DropZone from '../components/DropZone';
@@ -23,7 +23,7 @@ import { encodeStudentPackage } from '../utils/questionPackage';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SINGLE_GATES   = ['H', 'X', 'Y', 'Z', 'T', 'MEASURE'];
-const ALL_PALETTE_GATES = ['H', 'X', 'Y', 'Z', 'T', 'MEASURE', 'CNOT', 'CZ', 'TOFFOLI'];
+const ALL_PALETTE_GATES = ['H', 'X', 'Y', 'Z', 'T', 'MEASURE', 'CNOT', 'CZ', 'FF_x', 'FF_Z', 'TOFFOLI', 'BARRIER'];
 
 // Row height = h-14 (56 px) + gap-2 (8 px) = 64 px = 4 rem  (center-to-center)
 const ROW_REM = 4;
@@ -343,6 +343,34 @@ function BuilderCircuitGrid({
     onCellsChange(prev => removeGateFromCircuit(prev, w, s));
   }
 
+  const [hoveredBarrier, setHoveredBarrier] = useState(null);
+
+  const resizeBarrier = (wireIndex, stepIndex, action) => {
+    if (readOnly) return;
+    onCellsChange(prev => {
+      const newCircuit = prev.map(wire => [...wire]);
+      const cell = newCircuit[wireIndex][stepIndex];
+      if (!cell || cell.name !== 'BARRIER') return prev;
+
+      for (let w = cell.topWire; w <= cell.bottomWire; w++) newCircuit[w][stepIndex] = null;
+
+      let newTop = cell.topWire;
+      let newBottom = cell.bottomWire;
+      if (action === 'extendTop')    newTop    = Math.max(0, newTop - 1);
+      if (action === 'shrinkTop')    newTop    = Math.min(newTop + 1, newBottom);
+      if (action === 'extendBottom') newBottom = Math.min(prev.length - 1, newBottom + 1);
+      if (action === 'shrinkBottom') newBottom = Math.max(newBottom - 1, newTop);
+
+      const newSpanWires = Array.from({ length: newBottom - newTop + 1 }, (_, i) => newTop + i);
+      insertColumnIfOccupied(newCircuit, stepIndex, newSpanWires);
+
+      for (let w = newTop; w <= newBottom; w++) {
+        newCircuit[w][stepIndex] = { name: 'BARRIER', topWire: newTop, bottomWire: newBottom };
+      }
+      return newCircuit;
+    });
+  };
+
   useEffect(() => {
     if (readOnly) return;
     return monitorForElements({
@@ -444,6 +472,10 @@ function BuilderCircuitGrid({
                       cell={circuit[w]?.[s] ?? null}
                       wireIndex={w} stepIndex={s}
                       onDelete={(w, s) => removeCell(w, s)}
+                      onRightClickDelete={(e, w2, s2) => { e.preventDefault(); removeCell(w2, s2); }}
+                      hoveredBarrier={hoveredBarrier}
+                      onHoverBarrier={setHoveredBarrier}
+                      onResizeBarrier={resizeBarrier}
                       customRenderer={(cell, cw, cs) => {
                         if (readOnly && cell && cell.blank) {
                           return (
