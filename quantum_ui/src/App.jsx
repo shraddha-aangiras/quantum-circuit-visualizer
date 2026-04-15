@@ -562,7 +562,7 @@ function App() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="fixed inset-0 flex font-sans text-slate-300 bg-slate-950">
+    <div className="fixed inset-0 w-full flex font-sans text-slate-300 bg-slate-950">
 
       {/* Left sidebar */}
       <aside className="w-55 bg-slate-900 border-r border-slate-700/50 flex flex-col shrink-0 z-10">
