@@ -28,7 +28,7 @@ export const QUESTIONS = [
     title: 'Create an X Gate',
     description:
       'The circuit below has H gates on either side of a blank. ' +
-      'Fill the blank with a single gate so that the whole circuit acts as an X gate. ' /*+
+      'Fill the blank with a single gate so that the whole circuit acts as an X gate. $X$' /*+
       'Hint: H Z H = X.'*/,
     points: 10,
     restrictToBlanks: true,

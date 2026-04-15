@@ -796,7 +796,7 @@ export default function QuestionsPage() {
               <span className="text-slate-600"> · {question.points} points</span>
             </p>
             <h2 className="text-xl font-bold text-white mb-2">{question.title}</h2>
-            <div className="text-sm text-slate-400 max-w-lg leading-relaxed">
+            <div className="text-sm text-slate-400 max-w-3xl leading-relaxed">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
