@@ -362,6 +362,11 @@ export default function QuestionsPage() {
         if (!dest) return;
 
         const { wireIndex, stepIndex } = dest.data;
+
+        if (!question.restrictToBlanks && stepIndex < question.circuit[0].length) {
+          return;
+        }
+
         setCircuitState(prev => {
           const cell = prev[wireIndex]?.[stepIndex];
           if (source.data.type === 'gate' && cell?.blank && (cell.name === 'BLANK_2' || cell.name === 'BLANK_3')) {
@@ -471,7 +476,13 @@ export default function QuestionsPage() {
             hiddenBlocks: question.hiddenBlocks,
           });
           // For free-form (equivalent circuit) mode, left-align after every drop
-          return question.restrictToBlanks ? next : compactCircuit(next);
+          if (question.restrictToBlanks) return next;
+          
+          const sep = question.circuit[0].length;
+          const left = next.map(w => w.slice(0, sep));
+          const right = next.map(w => w.slice(sep));
+          const compactedRight = compactCircuit(right);
+          return left.map((w, i) => [...w, ...compactedRight[i]]);
         });
         setFeedback(null);
       },
@@ -499,7 +510,13 @@ export default function QuestionsPage() {
       // removeGateFromCircuit guards cell.locked — locked question gates are never removed
       const next = removeGateFromCircuit(prev, wireIndex, stepIndex);
       // Left-align after delete in free-form mode
-      return question.restrictToBlanks ? next : compactCircuit(next);
+      if (question.restrictToBlanks) return next;
+
+      const sep = question.circuit[0].length;
+      const left = next.map(w => w.slice(0, sep));
+      const right = next.map(w => w.slice(sep));
+      const compactedRight = compactCircuit(right);
+      return left.map((w, i) => [...w, ...compactedRight[i]]);
     });
     setFeedback(null);
   }, [question]);
@@ -527,7 +544,12 @@ export default function QuestionsPage() {
       for (let w = newTop; w <= newBottom; w++) {
         newCircuit[w][stepIndex] = { name: 'BARRIER', topWire: newTop, bottomWire: newBottom };
       }
-      return compactCircuit(newCircuit);
+
+      const sep = question.circuit[0].length;
+      const left = newCircuit.map(w => w.slice(0, sep));
+      const right = newCircuit.map(w => w.slice(sep));
+      const compactedRight = compactCircuit(right);
+      return left.map((w, i) => [...w, ...compactedRight[i]]);
     });
   }, [question]);
 
