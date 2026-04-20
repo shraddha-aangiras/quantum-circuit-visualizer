@@ -20,6 +20,7 @@ import DropZone from '../components/DropZone';
 import CircuitCell from '../components/CircuitCell';
 import { encodeStudentPackage } from '../utils/questionPackage';
 import Credits from '../components/Credits';
+import ThemeToggle from '../components/ThemeToggle';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -961,6 +962,8 @@ export default function QuestionBuilderPage() {
             className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg border border-blue-500 text-white font-semibold transition-colors">
             ↓ Export Quiz File
           </button>
+          <span className="text-slate-700 select-none ml-2">|</span>
+          <ThemeToggle />
         </div>
       </header>
 

@@ -3,6 +3,7 @@ import MeasurementHistogram from './MeasurementHistogram';
 import ExpectationValue from './ExpectationValue';
 import { RefreshCw } from 'lucide-react';
 import Credits from './Credits';
+import ThemeToggle from './ThemeToggle';
 
 export default function ResultsPanel({
   isReady,
@@ -174,6 +175,7 @@ export default function ResultsPanel({
       <div className="px-4 py-3 border-b border-slate-700/50 shrink-0 flex items-center gap-2">
         <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-widest">Results</p>
         {measureStep !== null && <span className="text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded px-1.5 py-0.5">step {measureStep}</span>}
+        <ThemeToggle />
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col divide-y divide-slate-700/40">
