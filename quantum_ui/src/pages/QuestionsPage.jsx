@@ -994,6 +994,7 @@ export default function QuestionsPage() {
             }));
             setSimResults(simulateCircuit(engine, normalizedCircuit, null, shots, selectedQubit));
           }}
+          scrollableCredits={true}
         />
       </div>
     </div>

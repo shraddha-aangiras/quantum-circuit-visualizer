@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function Credits({ className = '' }) {
   return (
-    <div className={`p-3 text-[9px] text-slate-500 flex flex-col items-center text-center gap-1.5 leading-tight ${className}`}>
+    <div className={`p-3 text-[9px] text-gray-400 flex flex-col items-center text-center gap-1.5 leading-tight ${className}`}>
       <div className="bg-white px-2 py-1 rounded-md [.light-mode_&]:bg-transparent">
         <img 
           src="/iqc-logo.png" 

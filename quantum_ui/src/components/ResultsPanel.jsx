@@ -14,6 +14,7 @@ export default function ResultsPanel({
   shots,
   setShots,
   onResample,
+  scrollableCredits = false,
   children
 }) {
   const {
@@ -267,13 +268,21 @@ export default function ResultsPanel({
             </div>
             
             {children}
+
+            {scrollableCredits && (
+              <div className="mt-auto">
+                <Credits />
+              </div>
+            )}
           </>
         )}
       </div>
 
-      <div className="border-t border-slate-700/50 bg-slate-900 mt-auto">
-        <Credits />
-      </div>
+      {!scrollableCredits && (
+        <div className="border-t border-slate-700/50 bg-slate-900 mt-auto shrink-0">
+          <Credits />
+        </div>
+      )}
     </aside>
   );
 }
