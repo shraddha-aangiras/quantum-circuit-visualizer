@@ -213,13 +213,13 @@ function App() {
           {!isReady && <p className="text-[10px] text-amber-400 animate-pulse mt-0.5">Initializing…</p>}
           <Link
             to="/questions"
-            className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors mt-1.5 block"
+            className="text-[15px] text-blue-400 hover:text-blue-300 transition-colors mt-1.5 block"
           >
             Practice Questions →
           </Link>
           <Link
             to="/builder"
-            className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors mt-0.5 block"
+            className="text-[13px] text-slate-500 hover:text-slate-300 transition-colors mt-0.5 block"
           >
             Question Builder →
           </Link>
