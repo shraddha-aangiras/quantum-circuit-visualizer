@@ -815,7 +815,7 @@ export default function QuestionsPage() {
               {question.restrictToBlanks ? 'Drag onto a blank' : 'Drag onto circuit'}
             </p>
           </div>
-          <div className="p-4 overflow-y-auto">
+          <div className="p-4 overflow-y-auto flex-1">
             <div className="grid grid-cols-2 gap-3 items-center justify-items-center">
               {question.allowedGates.map(gate => (
                 <DraggableGate key={gate} gate={gate} />

@@ -19,6 +19,7 @@ import DraggablePlacedGate from '../components/DraggablePlacedGate';
 import DropZone from '../components/DropZone';
 import CircuitCell from '../components/CircuitCell';
 import { encodeStudentPackage } from '../utils/questionPackage';
+import Credits from '../components/Credits';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -994,11 +995,16 @@ export default function QuestionBuilderPage() {
           </div>
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6 flex flex-col">
           {selectedQ
             ? <QuestionEditor key={selectedQ.id} question={selectedQ} onChange={updateQuestion} />
             : <div className="text-slate-500 text-sm mt-8 text-center">Select a question or click "+ New Question".</div>
           }
+
+          {/* Credits section placed at the bottom of the main scrollable area */}
+          <div className="mt-auto pt-10">
+            <Credits />
+          </div>
         </main>
       </div>
     </div>

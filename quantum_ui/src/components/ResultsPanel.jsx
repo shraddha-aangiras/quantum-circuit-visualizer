@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import MeasurementHistogram from './MeasurementHistogram';
 import ExpectationValue from './ExpectationValue';
 import { RefreshCw } from 'lucide-react';
+import Credits from './Credits';
 
 export default function ResultsPanel({
   isReady,
@@ -266,6 +267,10 @@ export default function ResultsPanel({
             {children}
           </>
         )}
+      </div>
+
+      <div className="border-t border-slate-700/50 bg-slate-900 mt-auto">
+        <Credits />
       </div>
     </aside>
   );
