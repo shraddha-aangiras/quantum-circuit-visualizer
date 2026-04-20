@@ -12,25 +12,31 @@ void Simulator::run(const vector<Instruction>& circuit) {
 
     for (const auto& inst : circuit) {
         if (inst.name == "CNOT") {
+                if (inst.qubits.size() < 2) throw invalid_argument("CNOT requires 2 qubits");
             q_state.apply_cnot(inst.qubits[0], inst.qubits[1]);
 
         } else if (inst.name == "CZ") {
+                if (inst.qubits.size() < 2) throw invalid_argument("CZ requires 2 qubits");
             q_state.apply_cz(inst.qubits[0], inst.qubits[1]);
 
         } else if (inst.name == "TOFFOLI") {
+                if (inst.qubits.size() < 3) throw invalid_argument("TOFFOLI requires 3 qubits");
             q_state.apply_toffoli(inst.qubits[0], inst.qubits[1], inst.qubits[2]);
 
         } else if (inst.name == "MEASURE") {
+                if (inst.qubits.empty()) throw invalid_argument("MEASURE requires 1 qubit");
             int q = inst.qubits[0];
             classical_bits[q] = q_state.measure_qubit(q);
 
         } else if (inst.name == "FF_X") {
+                if (inst.qubits.size() < 2) throw invalid_argument("FF_X requires 2 qubits");
             // qubits[0] = source (measured), qubits[1] = target
             int src = inst.qubits[0], tgt = inst.qubits[1];
             if (classical_bits[src] == 1)
                 q_state.apply_1q_gate(GateRegistry::base_gates.at("X"), tgt);
 
         } else if (inst.name == "FF_Z") {
+                if (inst.qubits.size() < 2) throw invalid_argument("FF_Z requires 2 qubits");
             int src = inst.qubits[0], tgt = inst.qubits[1];
             if (classical_bits[src] == 1)
                 q_state.apply_1q_gate(GateRegistry::base_gates.at("Z"), tgt);
@@ -38,6 +44,7 @@ void Simulator::run(const vector<Instruction>& circuit) {
         } else {
             auto it = GateRegistry::base_gates.find(inst.name);
             if (it != GateRegistry::base_gates.end()) {
+                    if (inst.qubits.empty()) throw invalid_argument(inst.name + " requires 1 qubit");
                 q_state.apply_1q_gate(it->second, inst.qubits[0]);
             } else {
                 throw invalid_argument("Gate not found: " + inst.name);
