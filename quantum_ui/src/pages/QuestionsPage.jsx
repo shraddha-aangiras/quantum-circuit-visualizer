@@ -246,6 +246,55 @@ function initCircuit(question) {
   );
 }
 
+function getAnswerCircuit(question) {
+  const base = initCircuit(question);
+  if (!question.restrictToBlanks) {
+    let next = base.map(w => w.map(c => (c && !c.locked) ? null : c));
+    if (question.answer) {
+      const qLen = question.circuit[0].length;
+      question.answer.forEach(({ wireIndex, stepIndex, gate, role, targetWire, controlWire, controls }) => {
+        const absStep = stepIndex + qLen;
+        while (next[0].length <= absStep) next.forEach(w => w.push(null));
+        if (role) {
+          next[wireIndex][absStep] = { name: gate, role, targetWire, controlWire, controls };
+        } else {
+          next[wireIndex][absStep] = { name: gate };
+        }
+      });
+    }
+    return next;
+  }
+
+  // restrictToBlanks mode: reset blank fills, then fill each blank with its answer gate.
+  let next = base.map((w, wi) => w.map((c, si) => {
+    if (c?.blank) {
+      const orig = question.circuit[wi]?.[si];
+      if (orig) return { ...orig, filled: undefined };
+    }
+    return c;
+  }));
+  if (question.answer) {
+    question.answer.forEach(({ wireIndex, stepIndex, gate, role, targetWire, controlWire, controls }) => {
+      while (next[0].length <= stepIndex) next.forEach(w => w.push(null));
+      if (role) {
+        next[wireIndex][stepIndex] = { name: gate, role, targetWire, controlWire, controls };
+      } else {
+        const cell = next[wireIndex][stepIndex];
+        if (cell?.blank) {
+          if (cell.name === 'BLANK_2' || cell.name === 'BLANK_3') {
+            next = next.map(w => w.map((c, si) =>
+              (si === stepIndex && c?.blank && c.name === cell.name) ? { ...c, filled: gate } : c
+            ));
+          } else {
+            next[wireIndex][stepIndex] = { ...cell, filled: gate };
+          }
+        }
+      }
+    });
+  }
+  return next;
+}
+
 export default function QuestionsPage() {
   // ── Active question set (default = built-in, replaced when a .qpkg is loaded) ──
   const [activeQuestions, setActiveQuestions] = useState(QUESTIONS);
@@ -323,15 +372,24 @@ export default function QuestionsPage() {
 
   // ── Reset circuit + UI state whenever the question changes ──────────────────
   useEffect(() => {
-    setCircuitState(initCircuit(question));
-    setFeedback(null);
-    setAnswerRevealed(false);
+    if (questionIndex < scores.length) {
+      // We are looking at a previously answered question
+      setCircuitState(getAnswerCircuit(question));
+      setFeedback(scores[questionIndex].points > 0 ? 'correct' : null);
+      setAnswerRevealed(true);
+    } else {
+      // We are looking at a fresh question
+      setCircuitState(initCircuit(question));
+      setFeedback(null);
+      setAnswerRevealed(false);
+    }
     setSelectedQubit(null);
     setHoveredBarrier(null);
-  }, [questionIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [questionIndex, scores.length, question]);
 
   // ── Auto-expand circuit state to always have empty buffer slots at the end ──
   useEffect(() => {
+    if (questionIndex < scores.length) return; // Skip auto-expanding on past questions
     let highestOccupiedIndex = -1;
     circuitState.forEach(wire => {
       for (let i = wire.length - 1; i >= 0; i--) {
@@ -352,12 +410,13 @@ export default function QuestionsPage() {
     } else if (currentLength > desiredLength) {
       setCircuitState(prev => prev.map(wire => wire.slice(0, desiredLength)));
     }
-  }, [circuitState, question]);
+  }, [circuitState, question, questionIndex, scores.length]);
 
   // ── DnD monitor ─────────────────────────────────────────────────────────────
   useEffect(() => {
     return monitorForElements({
       onDrop({ source, location }) {
+        if (questionIndex < scores.length) return; // Prevent drag-and-drop on past questions
         const [dest] = location.current.dropTargets;
         if (!dest) return;
 
@@ -487,10 +546,11 @@ export default function QuestionsPage() {
         setFeedback(null);
       },
     });
-  }, [question]);
+  }, [question, questionIndex, scores.length]);
 
   // ── Delete gate ─────────────────────────────────────────────────────────────
   const deleteGate = useCallback((wireIndex, stepIndex) => {
+    if (questionIndex < scores.length) return; // Prevent deletions on past questions
     setCircuitState(prev => {
       const cell = prev[wireIndex]?.[stepIndex];
       // Blanks: clear the filled gate but preserve the blank structure so the
@@ -519,10 +579,11 @@ export default function QuestionsPage() {
       return left.map((w, i) => [...w, ...compactedRight[i]]);
     });
     setFeedback(null);
-  }, [question]);
+  }, [question, questionIndex, scores.length]);
 
   // ── Barrier Resize ─────────────────────────────────────────────────────────
   const resizeBarrier = useCallback((wireIndex, stepIndex, action) => {
+    if (questionIndex < scores.length) return; // Prevent resize on past questions
     if (question.restrictToBlanks) return;
     setCircuitState(prev => {
       const newCircuit = prev.map(wire => [...wire]);
@@ -551,7 +612,7 @@ export default function QuestionsPage() {
       const compactedRight = compactCircuit(right);
       return left.map((w, i) => [...w, ...compactedRight[i]]);
     });
-  }, [question]);
+  }, [question, questionIndex, scores.length]);
 
   // ── Check answer ─────────────────────────────────────────────────────────────
   const checkCorrect = useCallback(() => {
@@ -655,55 +716,7 @@ export default function QuestionsPage() {
   };
 
   const handleGetAnswer = () => {
-    setCircuitState(prev => {
-      if (!question.restrictToBlanks) {
-        // Equivalent-circuit mode: clear student gates, then place answer gates
-        // with the same offset used in checkCorrect so they land after the given circuit.
-        let next = prev.map(w => w.map(c => (c && !c.locked) ? null : c));
-        if (question.answer) {
-          const qLen = question.circuit[0].length;
-          question.answer.forEach(({ wireIndex, stepIndex, gate, role, targetWire, controlWire, controls }) => {
-            const absStep = stepIndex + qLen;
-            while (next[0].length <= absStep) next.forEach(w => w.push(null));
-            if (role) {
-              next[wireIndex][absStep] = { name: gate, role, targetWire, controlWire, controls };
-            } else {
-              next[wireIndex][absStep] = { name: gate };
-            }
-          });
-        }
-        return next;
-      }
-
-      // restrictToBlanks mode: reset blank fills, then fill each blank with its answer gate.
-      let next = prev.map((w, wi) => w.map((c, si) => {
-        if (c?.blank) {
-          const orig = question.circuit[wi]?.[si];
-          if (orig) return { ...orig, filled: undefined };
-        }
-        return c;
-      }));
-      if (question.answer) {
-        question.answer.forEach(({ wireIndex, stepIndex, gate, role, targetWire, controlWire, controls }) => {
-          while (next[0].length <= stepIndex) next.forEach(w => w.push(null));
-          if (role) {
-            next[wireIndex][stepIndex] = { name: gate, role, targetWire, controlWire, controls };
-          } else {
-            const cell = next[wireIndex][stepIndex];
-            if (cell?.blank) {
-              if (cell.name === 'BLANK_2' || cell.name === 'BLANK_3') {
-                next = next.map(w => w.map((c, si) =>
-                  (si === stepIndex && c?.blank && c.name === cell.name) ? { ...c, filled: gate } : c
-                ));
-              } else {
-                next[wireIndex][stepIndex] = { ...cell, filled: gate };
-              }
-            }
-          }
-        });
-      }
-      return next;
-    });
+    setCircuitState(getAnswerCircuit(question));
     setAnswerRevealed(true);
     setFeedback(null);
   };
@@ -853,7 +866,37 @@ export default function QuestionsPage() {
 
           {/* Controls + feedback */}
           <div className="flex items-center gap-3 flex-wrap">
-            {answerRevealed ? (
+            {questionIndex > 0 && (
+              <button
+                onClick={() => setQuestionIndex(qi => qi - 1)}
+                disabled={feedback === 'correct' && questionIndex === scores.length}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-600 text-slate-300 text-sm font-semibold rounded-lg transition-colors"
+              >
+                ← Back
+              </button>
+            )}
+            {questionIndex < scores.length ? (
+              <>
+                {scores[questionIndex].points > 0 ? (
+                  <div className="text-sm text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-lg px-3 py-1.5">
+                    ✓ Correctly answered! ({scores[questionIndex].points} pts)
+                  </div>
+                ) : (
+                  <div className="text-sm text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-1.5">
+                    Answer revealed — 0 points for this question
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    if (questionIndex + 1 < activeQuestions.length) setQuestionIndex(qi => qi + 1);
+                    else setPhase('done');
+                  }}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  {questionIndex + 1 < activeQuestions.length ? 'Next Question →' : 'Finish →'}
+                </button>
+              </>
+            ) : answerRevealed ? (
               <>
                 <div className="text-sm text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-1.5">
                   Answer revealed — 0 points for this question
