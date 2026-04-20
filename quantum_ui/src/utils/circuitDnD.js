@@ -56,8 +56,12 @@ export function clearGatesAfterMeasure(circuit) {
     }
     if (measureStep !== -1) {
       for (let s = measureStep + 1; s < next[w].length; s++) {
-        if (next[w][s]) {
-          next = removeGateFromCircuit(next, w, s);
+        const cell = next[w][s];
+        if (cell) {
+          const isClassicalControl = (['FF_X', 'FF_Z'].includes(cell.name) || ['FF_X', 'FF_Z'].includes(cell.filled)) && cell.role === 'control';
+          if (!isClassicalControl) {
+            next = removeGateFromCircuit(next, w, s);
+          }
         }
       }
     }
@@ -298,7 +302,7 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
       if (TWO_WIRE.includes(gateName)) {
         const tIdx = targetWire < next.length - 1 ? targetWire + 1 : targetWire - 1;
         if (tIdx >= 0 && tIdx < next.length) {
-          writeTwoWireGateCells(next, Math.min(targetWire, tIdx), Math.max(targetWire, tIdx), insertStep, gateName);
+          writeTwoWireGateCells(next, targetWire, tIdx, insertStep, gateName);
         }
       } else if (gateName === 'TOFFOLI') {
         if (next.length >= 3) {
@@ -351,7 +355,7 @@ export function applyGateDrop(prevCircuit, sourceData, destData, options = {}) {
           if (!isClassical && isMeasured(wIdx)) return prevCircuit;
           if (isMeasured(tIdx)) return prevCircuit;
 
-          writeTwoWireGateCells(next, Math.min(wIdx, tIdx), Math.max(wIdx, tIdx), sIdx, gateName);
+          writeTwoWireGateCells(next, wIdx, tIdx, sIdx, gateName);
           return next;
         }
       } else if (gateName === 'TOFFOLI') {
