@@ -372,25 +372,6 @@ export default function QuestionsPage() {
     }
   }, [circuitState, isReady, engine, shots, selectedQubit]);
 
-  // ── Reset circuit + UI state whenever the question changes ──────────────────
-  useEffect(() => {
-    if (questionIndex < scores.length) {
-      // We are looking at a previously answered question
-      setCircuitState(getAnswerCircuit(question));
-      setFeedback(scores[questionIndex].points > 0 ? 'correct' : null);
-      setAnswerRevealed(true);
-      setHiddenCircuitRevealed(false);
-    } else {
-      // We are looking at a fresh question
-      setCircuitState(initCircuit(question));
-      setFeedback(null);
-      setAnswerRevealed(false);
-      setHiddenCircuitRevealed(false);
-    }
-    setSelectedQubit(null);
-    setHoveredBarrier(null);
-  }, [questionIndex, scores.length, question]);
-
   // ── Auto-expand circuit state to always have empty buffer slots at the end ──
   useEffect(() => {
     if (questionIndex < scores.length) return; // Skip auto-expanding on past questions
@@ -703,7 +684,15 @@ export default function QuestionsPage() {
     const newScores  = [...scores, record];
     setScores(newScores);
     if (questionIndex + 1 < activeQuestions.length) {
-      setQuestionIndex(qi => qi + 1);
+      const nextIdx = questionIndex + 1;
+      const nextQ = activeQuestions[nextIdx];
+      setCircuitState(initCircuit(nextQ));
+      setFeedback(null);
+      setAnswerRevealed(false);
+      setHiddenCircuitRevealed(false);
+      setSelectedQubit(null);
+      setHoveredBarrier(null);
+      setQuestionIndex(nextIdx);
     } else {
       setPhase('done');
     }
@@ -880,7 +869,15 @@ export default function QuestionsPage() {
                       setScores(prev => [...prev, { questionId: question.id, points: 0, usedHint: true }]);
                     }
                   }
-                  setQuestionIndex(qi => qi - 1);
+                  const prevIdx = questionIndex - 1;
+                  const prevQ = activeQuestions[prevIdx];
+                  setCircuitState(getAnswerCircuit(prevQ));
+                  setFeedback(scores[prevIdx].points > 0 ? 'correct' : null);
+                  setAnswerRevealed(true);
+                  setHiddenCircuitRevealed(false);
+                  setSelectedQubit(null);
+                  setHoveredBarrier(null);
+                  setQuestionIndex(prevIdx);
                 }}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 text-sm font-semibold rounded-lg transition-colors"
               >
@@ -900,8 +897,23 @@ export default function QuestionsPage() {
                 )}
                 <button
                   onClick={() => {
-                    if (questionIndex + 1 < activeQuestions.length) setQuestionIndex(qi => qi + 1);
-                    else setPhase('done');
+                  const nextIdx = questionIndex + 1;
+                  if (nextIdx < activeQuestions.length) {
+                    const nextQ = activeQuestions[nextIdx];
+                    if (nextIdx < scores.length) {
+                      setCircuitState(getAnswerCircuit(nextQ));
+                      setFeedback(scores[nextIdx].points > 0 ? 'correct' : null);
+                      setAnswerRevealed(true);
+                    } else {
+                      setCircuitState(initCircuit(nextQ));
+                      setFeedback(null);
+                      setAnswerRevealed(false);
+                    }
+                    setHiddenCircuitRevealed(false);
+                    setSelectedQubit(null);
+                    setHoveredBarrier(null);
+                    setQuestionIndex(nextIdx);
+                  } else setPhase('done');
                   }}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold rounded-lg transition-colors"
                 >
