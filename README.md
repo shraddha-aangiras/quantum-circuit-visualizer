@@ -10,8 +10,6 @@ It also doubles as an educational tool.
 - A **built-in set of guided questions** covers gates, superposition, entanglement, measurement, and feed-forward, and serves as an interactive walkthrough for learning quantum computing from the ground up. 
 - For teachers, a **full question builder** allows creating custom circuit questions with blanks, hidden blocks, and auto-grading, which can be exported and sent to students as a single file.
 
----
-
 ## Features
 
 - **Drag-and-drop circuit builder** with support for single-qubit gates (H, X, Y, Z, S, T), two-qubit gates (CNOT, CZ), three-qubit gates (Toffoli), measurement, and classical feed-forward (FF_X, FF_Z)
@@ -23,8 +21,6 @@ It also doubles as an educational tool.
 - **Quiz mode** for loading teacher-created `.qpkg` question sets with blanks, hidden circuit regions, and per-question explanations
 - **Question Builder** for teachers to create, export, and share custom quizzes
 
----
-
 ## User Guide
 
 ### Getting Started
@@ -35,7 +31,6 @@ The **Learn with Circuits** tab loads a set of built-in questions that progressi
 
 Teachers can use the **Question Builder** to create custom quizes with significant customization options to design questions, and send it to students.
 
----
 
 ### Reading the Results
 
@@ -53,7 +48,6 @@ After running a circuit, the results panel on the left shows:
 
 **Timestep-by-timestep state:** Use barriers to visually separate circuit stages. The simulation runs the full circuit as built; to inspect the intermediate state at a given point, place a measurement gate at that timestep. The statevector and probabilities always reflect the full circuit as built.
 
----
 
 ### For Teachers: Creating & Sending a Quiz
 
@@ -71,7 +65,6 @@ After running a circuit, the results panel on the left shows:
 
 You can also click **Save JSON Backup** at any time to save your work-in-progress as a `.json` file, which you can reload later with **Load JSON Backup**.
 
----
 
 ### For Students: Loading & Taking a Quiz
 
@@ -85,26 +78,6 @@ You can also click **Save JSON Backup** at any time to save your work-in-progres
 8. After submitting, the explanation for that question is revealed.
 
 If you do not have a `.qpkg` file, the built-in practice questions load automatically with no file needed.
-
----
-
-### Reading the Results
-
-After running a circuit, the results panel on the left shows:
-
-| Panel | What it shows |
-|---|---|
-| **Amplitudes** | The complex amplitudes of each basis state in the statevector |
-| **Counts** | A histogram of measurement outcomes sampled over multiple shots |
-| **Expectation Values** | Click any qubit label (e.g. `q[0]`) to see ⟨X⟩, ⟨Y⟩, ⟨Z⟩ for that qubit |
-
-**Expectation values per qubit:** Click a qubit label on the left side of the circuit (e.g. `q[0]`, `q[1]`) to show the Pauli expectation values ⟨X⟩, ⟨Y⟩, ⟨Z⟩ for that qubit in the results panel. This is useful for questions about qubit state in different measurement bases.
-
-**Amplitudes and counts** always appear together: amplitudes show the exact statevector entries, and counts show a sampled histogram (default 100 shots) to illustrate measurement statistics.
-
-**Timestep-by-timestep state:** The simulation runs the full circuit. To inspect the state partway through, place a measurement gate at the desired timestep. The statevector and probabilities shown always reflect the full circuit as built.
-
----
 
 ## Custom Hosting on Vercel
 
