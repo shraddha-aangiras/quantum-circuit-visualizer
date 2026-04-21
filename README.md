@@ -1,6 +1,6 @@
 # Quantum Circuit Visualizer
 
-**Website:** https://quantum-circuit-visualizer-steel.vercel.app/
+**Website:** [https://quantum-circuit-visualizer-steel.vercel.app/](https://iqc-circuit-visualizer.vercel.app/)
 
 A browser-based drag-and-drop quantum circuit visualizer & simulator! 
 
