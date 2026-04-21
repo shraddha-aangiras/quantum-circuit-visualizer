@@ -215,7 +215,7 @@ function App() {
             to="/questions"
             className="text-[15px] text-blue-400 hover:text-blue-300 transition-colors mt-1.5 block"
           >
-            Practice Questions →
+            Learn with Circuits →
           </Link>
           <Link
             to="/builder"
