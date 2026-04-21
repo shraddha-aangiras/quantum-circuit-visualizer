@@ -872,9 +872,17 @@ export default function QuestionsPage() {
             <div className="flex items-center gap-3 flex-wrap">
             {questionIndex > 0 && (
               <button
-                onClick={() => setQuestionIndex(qi => qi - 1)}
-                disabled={feedback === 'correct' && questionIndex === scores.length}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-600 text-slate-300 text-sm font-semibold rounded-lg transition-colors"
+                onClick={() => {
+                  if (questionIndex === scores.length) {
+                    if (feedback === 'correct') {
+                      setScores(prev => [...prev, { questionId: question.id, points: question.points, usedHint: false }]);
+                    } else if (answerRevealed) {
+                      setScores(prev => [...prev, { questionId: question.id, points: 0, usedHint: true }]);
+                    }
+                  }
+                  setQuestionIndex(qi => qi - 1);
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 text-sm font-semibold rounded-lg transition-colors"
               >
                 ← Back
               </button>
